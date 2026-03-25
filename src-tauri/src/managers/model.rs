@@ -359,9 +359,11 @@ impl ModelManager {
                 description: "Very fast, Japanese. Lightweight on-device model.".to_string(),
                 filename: "moonshine-base-ja".to_string(),
                 url: Some(
-                    "https://blob.handy.computer/moonshine-base-ja.tar.gz".to_string(),
+                    "https://github.com/musus/Handy/releases/download/v0.8.0-moonshine-ja/moonshine-base-ja.tar.gz".to_string(),
                 ),
-                sha256: None,
+                sha256: Some(
+                    "7368a29eeeb189ea1b3132b191fcbfbfe11d97f31ed19230c8e587a254617072".to_string(),
+                ),
                 size_mb: 134,
                 is_downloaded: false,
                 is_downloading: false,
