@@ -352,6 +352,33 @@ impl ModelManager {
         );
 
         available_models.insert(
+            "moonshine-base-ja".to_string(),
+            ModelInfo {
+                id: "moonshine-base-ja".to_string(),
+                name: "Moonshine Base Japanese".to_string(),
+                description: "Very fast, Japanese. Lightweight on-device model.".to_string(),
+                filename: "moonshine-base-ja".to_string(),
+                url: Some(
+                    "https://blob.handy.computer/moonshine-base-ja.tar.gz".to_string(),
+                ),
+                sha256: None,
+                size_mb: 134,
+                is_downloaded: false,
+                is_downloading: false,
+                partial_size: 0,
+                is_directory: true,
+                engine_type: EngineType::Moonshine,
+                accuracy_score: 0.70,
+                speed_score: 0.90,
+                supports_translation: false,
+                is_recommended: false,
+                supported_languages: vec!["ja".to_string()],
+                supports_language_selection: false,
+                is_custom: false,
+            },
+        );
+
+        available_models.insert(
             "moonshine-tiny-streaming-en".to_string(),
             ModelInfo {
                 id: "moonshine-tiny-streaming-en".to_string(),

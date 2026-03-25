@@ -18,7 +18,7 @@ use transcribe_rs::{
     onnx::{
         canary::CanaryModel,
         gigaam::GigaAMModel,
-        moonshine::{MoonshineModel, MoonshineVariant, StreamingModel},
+        moonshine::{MoonshineModel, MoonshineParams, MoonshineVariant, StreamingModel},
         parakeet::{ParakeetModel, ParakeetParams, TimestampGranularity},
         sense_voice::{SenseVoiceModel, SenseVoiceParams},
         Quantization,
@@ -317,9 +317,14 @@ impl TranscriptionManager {
                 LoadedEngine::Parakeet(engine)
             }
             EngineType::Moonshine => {
+                let variant = match model_id {
+                    "moonshine-base-ja" => MoonshineVariant::Base,
+                    "moonshine-base-es" => MoonshineVariant::BaseEs,
+                    _ => MoonshineVariant::Base,
+                };
                 let engine = MoonshineModel::load(
                     &model_path,
-                    MoonshineVariant::Base,
+                    variant,
                     &Quantization::default(),
                 )
                 .map_err(|e| {
@@ -556,9 +561,27 @@ impl TranscriptionManager {
                                     anyhow::anyhow!("Parakeet transcription failed: {}", e)
                                 })
                         }
-                        LoadedEngine::Moonshine(moonshine_engine) => moonshine_engine
-                            .transcribe(&audio, &TranscribeOptions::default())
-                            .map_err(|e| anyhow::anyhow!("Moonshine transcription failed: {}", e)),
+                        LoadedEngine::Moonshine(moonshine_engine) => {
+                            // CJK models need higher token rate for max_length
+                            let model_id = &settings.selected_model;
+                            let is_cjk = model_id.ends_with("-ja")
+                                || model_id.ends_with("-zh")
+                                || model_id.ends_with("-ko")
+                                || model_id.ends_with("-ar");
+                            let token_rate: f32 = if is_cjk { 13.0 } else { 6.0 };
+                            let audio_duration = audio.len() as f32 / 16000.0;
+                            let params = MoonshineParams {
+                                max_length: Some(
+                                    (audio_duration * token_rate).ceil() as usize,
+                                ),
+                                ..Default::default()
+                            };
+                            moonshine_engine
+                                .transcribe_with(&audio, &params)
+                                .map_err(|e| {
+                                    anyhow::anyhow!("Moonshine transcription failed: {}", e)
+                                })
+                        }
                         LoadedEngine::MoonshineStreaming(streaming_engine) => streaming_engine
                             .transcribe(&audio, &TranscribeOptions::default())
                             .map_err(|e| {
