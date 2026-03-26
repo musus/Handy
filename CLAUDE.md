@@ -148,6 +148,37 @@ Handy supports command-line parameters on all platforms for integration with scr
 - `send_transcription_input()` in `signal_handle.rs` is shared between signal handlers and CLI to avoid code duplication
 - `CliArgs` is stored in Tauri managed state (`.manage()`) so it's accessible in `on_window_event` and other handlers
 
+## Fork Information
+
+This repo is a fork of [cjpais/Handy](https://github.com/cjpais/Handy). The upstream remote should be configured as:
+
+```bash
+git remote add upstream https://github.com/cjpais/Handy.git
+```
+
+### Fork-specific changes (to preserve during upstream merges)
+
+**1. Moonshine Base Japanese model support**
+
+- `src-tauri/src/managers/model.rs` — Added `moonshine-base-ja` entry to `available_models` (model ID, download URL from this fork's GitHub Releases, SHA256, etc.)
+- `src-tauri/src/managers/transcription.rs` — Two changes:
+  - **Model loading:** Added `MoonshineVariant` selection logic based on model ID suffix (`-ja`, `-es`)
+  - **Transcription:** Added CJK-aware `MoonshineParams` with higher `token_rate` (13.0 vs 6.0) and dynamic `max_length` calculation for Japanese/Chinese/Korean/Arabic models
+- Import of `MoonshineParams` added to transcription.rs
+
+**2. Patched transcribe-rs library**
+
+- `src-tauri/transcribe-rs-patch/` — Full vendored copy of transcribe-rs with patches (likely for Japanese Moonshine model support)
+- `src-tauri/Cargo.toml` — Added `[patch.crates-io]` entry: `transcribe-rs = { path = "transcribe-rs-patch" }` to override the upstream crate
+
+### Merge strategy for upstream updates
+
+When merging upstream changes (`git fetch upstream && git merge upstream/main`):
+
+- **Likely conflict files:** `src-tauri/src/managers/model.rs`, `src-tauri/src/managers/transcription.rs`, `src-tauri/Cargo.toml`
+- **Resolution approach:** Keep our additions (moonshine-base-ja model entry, CJK token rate logic, transcribe-rs-patch) while accepting upstream's other changes
+- If upstream updates `transcribe-rs` version in Cargo.toml, check if `transcribe-rs-patch` needs to be rebased on the new version
+
 ## Debug Mode
 
 Access debug features: `Cmd+Shift+D` (macOS) or `Ctrl+Shift+D` (Windows/Linux)

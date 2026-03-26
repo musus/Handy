@@ -12,7 +12,7 @@
 [package]
 edition = "2021"
 name = "transcribe-rs"
-version = "0.3.2"
+version = "0.3.3"
 build = false
 autolib = false
 autobins = false
@@ -231,6 +231,7 @@ optional = true
 [dependencies.whisper-rs]
 version = "0.16.0"
 optional = true
+features = ["raw-api"]
 
 [dev-dependencies.once_cell]
 version = "1.21.3"
