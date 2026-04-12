@@ -88,6 +88,10 @@
       "canary-1b-v2": {
         "name": "Canary 1B v2",
         "description": "Multilingue précis. 25 langues européennes. Supporte la traduction."
+      },
+      "cohere-int8": {
+        "name": "Cohere",
+        "description": "Un modèle volumineux, plus lent, mais très précis et multilingue."
       }
     },
     "errors": {
@@ -259,6 +263,11 @@
         "ort": {
           "title": "Accélération ONNX",
           "description": "Accélération matérielle pour les modèles ONNX (Parakeet, Canary, Moonshine, etc.). DirectML sur Windows est expérimental. Les modèles peuvent échouer à transcrire."
+        },
+        "gpuDevice": {
+          "title": "Appareil GPU",
+          "description": "Sélectionnez le GPU à utiliser pour l'inférence Whisper. Auto choisit le GPU dédié.",
+          "auto": "Auto"
         }
       },
       "startHidden": {
@@ -542,7 +551,10 @@
     "downloading": "Téléchargement... {{progress}}%",
     "installing": "Installation...",
     "preparing": "Préparation...",
-    "checkForUpdates": "Rechercher des mises à jour"
+    "checkForUpdates": "Rechercher des mises à jour",
+    "portableUpdateTitle": "Manual update required",
+    "portableUpdateMessage": "Portable installs cannot be updated automatically. To update: download the latest NSIS installer from GitHub Releases, install it to the same folder, then copy your Data/ folder (settings, models, recordings) from the old version to the new one.",
+    "portableUpdateButton": "Open GitHub Releases"
   },
   "common": {
     "loading": "Chargement...",
@@ -585,7 +597,9 @@
     "noInputDevice": "Aucun périphérique d'entrée audio n'a été détecté. Veuillez connecter un microphone ou un casque et réessayer.",
     "recordingFailed": "Échec du démarrage de l'enregistrement : {{error}}",
     "modelLoadFailed": "Échec du chargement du modèle : {{model}}",
-    "modelLoadFailedUnknown": "modèle inconnu"
+    "modelLoadFailedUnknown": "modèle inconnu",
+    "pasteFailedTitle": "Échec du collage du texte",
+    "pasteFailed": "Le texte n'a pas pu être collé dans l'application active."
   },
   "appLanguage": {
     "title": "Langue de l'application",

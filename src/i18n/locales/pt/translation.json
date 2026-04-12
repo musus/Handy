@@ -88,6 +88,10 @@
       "canary-1b-v2": {
         "name": "Canary 1B v2",
         "description": "Multilíngue preciso. 25 idiomas europeus. Suporta tradução."
+      },
+      "cohere-int8": {
+        "name": "Cohere",
+        "description": "Um modelo grande, mais lento, mas muito preciso e multilíngue."
       }
     },
     "errors": {
@@ -259,6 +263,11 @@
         "ort": {
           "title": "Aceleração ONNX",
           "description": "Aceleração por hardware para modelos ONNX (Parakeet, Canary, Moonshine, etc.). DirectML no Windows é experimental. Os modelos podem falhar na transcrição."
+        },
+        "gpuDevice": {
+          "title": "Dispositivo GPU",
+          "description": "Selecione qual GPU usar para inferência do Whisper. Auto escolhe a GPU dedicada.",
+          "auto": "Auto"
         }
       },
       "startHidden": {
@@ -542,7 +551,10 @@
     "downloading": "Baixando... {{progress}}%",
     "installing": "Instalando...",
     "preparing": "Preparando...",
-    "checkForUpdates": "Verificar atualizações"
+    "checkForUpdates": "Verificar atualizações",
+    "portableUpdateTitle": "Manual update required",
+    "portableUpdateMessage": "Portable installs cannot be updated automatically. To update: download the latest NSIS installer from GitHub Releases, install it to the same folder, then copy your Data/ folder (settings, models, recordings) from the old version to the new one.",
+    "portableUpdateButton": "Open GitHub Releases"
   },
   "common": {
     "loading": "Carregando...",
@@ -585,7 +597,9 @@
     "noInputDevice": "Nenhum dispositivo de entrada de áudio foi detectado. Conecte um microfone ou fone de ouvido e tente novamente.",
     "recordingFailed": "Falha ao iniciar a gravação: {{error}}",
     "modelLoadFailed": "Falha ao carregar o modelo: {{model}}",
-    "modelLoadFailedUnknown": "modelo desconhecido"
+    "modelLoadFailedUnknown": "modelo desconhecido",
+    "pasteFailedTitle": "Falha ao colar o texto",
+    "pasteFailed": "Não foi possível colar o texto no aplicativo ativo."
   },
   "appLanguage": {
     "title": "Idioma da Aplicação",

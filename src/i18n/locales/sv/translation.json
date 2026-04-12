@@ -88,6 +88,10 @@
       "canary-1b-v2": {
         "name": "Canary 1B v2",
         "description": "Noggrann flerspråkig. 25 europeiska språk. Stöder översättning."
+      },
+      "cohere-int8": {
+        "name": "Cohere",
+        "description": "En stor, långsammare, men mycket noggrann flerspråkig modell."
       }
     },
     "errors": {
@@ -259,6 +263,11 @@
         "ort": {
           "title": "ONNX-acceleration",
           "description": "Hårdvaruacceleration för ONNX-modeller (Parakeet, Canary, Moonshine, etc.). DirectML på Windows är experimentellt. Modeller kan misslyckas med att transkribera."
+        },
+        "gpuDevice": {
+          "title": "GPU-enhet",
+          "description": "Välj vilken GPU som ska användas för Whisper-inferens. Auto väljer den dedikerade GPU:n.",
+          "auto": "Auto"
         }
       },
       "startHidden": {
@@ -542,7 +551,10 @@
     "downloading": "Laddar ner... {{progress}}%",
     "installing": "Installerar...",
     "preparing": "Förbereder...",
-    "checkForUpdates": "Sök efter uppdateringar"
+    "checkForUpdates": "Sök efter uppdateringar",
+    "portableUpdateTitle": "Manual update required",
+    "portableUpdateMessage": "Portable installs cannot be updated automatically. To update: download the latest NSIS installer from GitHub Releases, install it to the same folder, then copy your Data/ folder (settings, models, recordings) from the old version to the new one.",
+    "portableUpdateButton": "Open GitHub Releases"
   },
   "common": {
     "loading": "Laddar...",
@@ -585,7 +597,9 @@
     "modelLoadFailed": "Misslyckades med att ladda modell: {{model}}",
     "modelLoadFailedUnknown": "okänd modell",
     "noInputDeviceTitle": "Ingen mikrofon hittades",
-    "noInputDevice": "Ingen ljudenhet hittades. Anslut en mikrofon eller ett headset och försök igen."
+    "noInputDevice": "Ingen ljudenhet hittades. Anslut en mikrofon eller ett headset och försök igen.",
+    "pasteFailedTitle": "Det gick inte att klistra in texten",
+    "pasteFailed": "Texten kunde inte klistras in i det aktiva programmet."
   },
   "appLanguage": {
     "title": "Applikationsspråk",

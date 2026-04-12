@@ -88,6 +88,10 @@
       "canary-1b-v2": {
         "name": "Canary 1B v2",
         "description": "Đa ngôn ngữ chính xác. 25 ngôn ngữ châu Âu. Hỗ trợ dịch thuật."
+      },
+      "cohere-int8": {
+        "name": "Cohere",
+        "description": "Mô hình lớn, chậm hơn, nhưng rất chính xác và đa ngôn ngữ."
       }
     },
     "errors": {
@@ -259,6 +263,11 @@
         "ort": {
           "title": "Tăng tốc ONNX",
           "description": "Tăng tốc phần cứng cho các mô hình ONNX (Parakeet, Canary, Moonshine, v.v.). DirectML trên Windows là thử nghiệm. Các mô hình có thể không chuyển đổi giọng nói được."
+        },
+        "gpuDevice": {
+          "title": "Thiết bị GPU",
+          "description": "Chọn GPU để sử dụng cho suy luận Whisper. Tự động chọn GPU chuyên dụng.",
+          "auto": "Tự động"
         }
       },
       "startHidden": {
@@ -542,7 +551,10 @@
     "downloading": "Đang tải... {{progress}}%",
     "installing": "Đang cài đặt...",
     "preparing": "Đang chuẩn bị...",
-    "checkForUpdates": "Kiểm tra cập nhật"
+    "checkForUpdates": "Kiểm tra cập nhật",
+    "portableUpdateTitle": "Manual update required",
+    "portableUpdateMessage": "Portable installs cannot be updated automatically. To update: download the latest NSIS installer from GitHub Releases, install it to the same folder, then copy your Data/ folder (settings, models, recordings) from the old version to the new one.",
+    "portableUpdateButton": "Open GitHub Releases"
   },
   "common": {
     "loading": "Đang tải...",
@@ -585,7 +597,9 @@
     "noInputDevice": "Không phát hiện thiết bị đầu vào âm thanh nào. Vui lòng kết nối micrô hoặc tai nghe và thử lại.",
     "recordingFailed": "Không thể bắt đầu ghi âm: {{error}}",
     "modelLoadFailed": "Không thể tải mô hình: {{model}}",
-    "modelLoadFailedUnknown": "mô hình không xác định"
+    "modelLoadFailedUnknown": "mô hình không xác định",
+    "pasteFailedTitle": "Không thể dán văn bản",
+    "pasteFailed": "Không thể dán văn bản vào ứng dụng đang hoạt động."
   },
   "appLanguage": {
     "title": "Ngôn ngữ ứng dụng",

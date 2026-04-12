@@ -10,13 +10,14 @@ use serde::Serialize;
 use specta::Type;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Condvar, Mutex, MutexGuard};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, OnceLock};
 use std::thread;
 use std::time::{Duration, SystemTime};
 use tauri::{AppHandle, Emitter, Manager};
 use transcribe_rs::{
     onnx::{
         canary::CanaryModel,
+        cohere::CohereModel,
         gigaam::GigaAMModel,
         moonshine::{MoonshineModel, MoonshineParams, MoonshineVariant, StreamingModel},
         parakeet::{ParakeetModel, ParakeetParams, TimestampGranularity},
@@ -43,6 +44,7 @@ enum LoadedEngine {
     SenseVoice(SenseVoiceModel),
     GigaAM(GigaAMModel),
     Canary(CanaryModel),
+    Cohere(CohereModel),
 }
 
 /// RAII guard that clears the `is_loading` flag and notifies waiters on drop.
@@ -372,6 +374,14 @@ impl TranscriptionManager {
                 })?;
                 LoadedEngine::Canary(engine)
             }
+            EngineType::Cohere => {
+                let engine = CohereModel::load(&model_path, &Quantization::Int8).map_err(|e| {
+                    let error_msg = format!("Failed to load cohere model {}: {}", model_id, e);
+                    emit_loading_failed(&error_msg);
+                    anyhow::anyhow!(error_msg)
+                })?;
+                LoadedEngine::Cohere(engine)
+            }
         };
 
         // Update the current engine and model ID
@@ -618,10 +628,29 @@ impl TranscriptionManager {
                             let options = TranscribeOptions {
                                 language: lang,
                                 translate: settings.translate_to_english,
+                                ..Default::default()
                             };
                             canary_engine
                                 .transcribe(&audio, &options)
                                 .map_err(|e| anyhow::anyhow!("Canary transcription failed: {}", e))
+                        }
+                        LoadedEngine::Cohere(cohere_engine) => {
+                            let lang = if validated_language == "auto" {
+                                None
+                            } else if validated_language == "zh-Hans"
+                                || validated_language == "zh-Hant"
+                            {
+                                Some("zh".to_string())
+                            } else {
+                                Some(validated_language.clone())
+                            };
+                            let options = TranscribeOptions {
+                                language: lang,
+                                ..Default::default()
+                            };
+                            cohere_engine
+                                .transcribe(&audio, &options)
+                                .map_err(|e| anyhow::anyhow!("Cohere transcription failed: {}", e))
                         }
                     }
                 },
@@ -740,7 +769,16 @@ pub fn apply_accelerator_settings(app: &tauri::AppHandle) {
         WhisperAcceleratorSetting::Gpu => accel::WhisperAccelerator::Gpu,
     };
     accel::set_whisper_accelerator(whisper_pref);
-    info!("Whisper accelerator set to: {}", whisper_pref);
+    accel::set_whisper_gpu_device(settings.whisper_gpu_device);
+    info!(
+        "Whisper accelerator set to: {}, gpu_device: {}",
+        whisper_pref,
+        if settings.whisper_gpu_device == accel::GPU_DEVICE_AUTO {
+            "auto".to_string()
+        } else {
+            settings.whisper_gpu_device.to_string()
+        }
+    );
 
     let ort_pref = match settings.ort_accelerator {
         OrtAcceleratorSetting::Auto => accel::OrtAccelerator::Auto,
@@ -754,9 +792,44 @@ pub fn apply_accelerator_settings(app: &tauri::AppHandle) {
 }
 
 #[derive(Serialize, Clone, Debug, Type)]
+pub struct GpuDeviceOption {
+    pub id: i32,
+    pub name: String,
+    pub total_vram_mb: usize,
+}
+
+static GPU_DEVICES: OnceLock<Vec<GpuDeviceOption>> = OnceLock::new();
+
+fn cached_gpu_devices() -> &'static [GpuDeviceOption] {
+    use transcribe_rs::whisper_cpp::gpu::list_gpu_devices;
+
+    GPU_DEVICES.get_or_init(|| {
+        // ggml's Vulkan backend uses FMA3 instructions internally.
+        // On older CPUs without FMA3 (e.g. Sandy Bridge Xeons) this causes
+        // a SIGILL crash that cannot be caught. Skip enumeration entirely
+        // on those CPUs — GPU-accelerated whisper won't work there anyway.
+        #[cfg(target_arch = "x86_64")]
+        if !std::arch::is_x86_feature_detected!("fma") {
+            warn!("CPU lacks FMA3 support — skipping GPU device enumeration");
+            return Vec::new();
+        }
+
+        list_gpu_devices()
+            .into_iter()
+            .map(|d| GpuDeviceOption {
+                id: d.id,
+                name: d.name,
+                total_vram_mb: d.total_vram / (1024 * 1024),
+            })
+            .collect()
+    })
+}
+
+#[derive(Serialize, Clone, Debug, Type)]
 pub struct AvailableAccelerators {
     pub whisper: Vec<String>,
     pub ort: Vec<String>,
+    pub gpu_devices: Vec<GpuDeviceOption>,
 }
 
 /// Return which accelerators are compiled into this build.
@@ -773,6 +846,7 @@ pub fn get_available_accelerators() -> AvailableAccelerators {
     AvailableAccelerators {
         whisper: whisper_options,
         ort: ort_options,
+        gpu_devices: cached_gpu_devices().to_vec(),
     }
 }
 

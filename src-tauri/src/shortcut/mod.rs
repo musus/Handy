@@ -671,6 +671,15 @@ pub fn change_extra_recording_buffer_setting(app: AppHandle, ms: u64) -> Result<
 
 #[tauri::command]
 #[specta::specta]
+pub fn change_paste_delay_ms_setting(app: AppHandle, ms: u64) -> Result<(), String> {
+    let mut settings = settings::get_settings(&app);
+    settings.paste_delay_ms = ms;
+    settings::write_settings(&app, settings);
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
 pub fn change_paste_method_setting(app: AppHandle, method: String) -> Result<(), String> {
     let mut settings = settings::get_settings(&app);
     let parsed = match method.as_str() {
@@ -1124,9 +1133,25 @@ pub fn change_ort_accelerator_setting(
     Ok(())
 }
 
-/// Return which ORT accelerators are compiled into this build.
 #[tauri::command]
 #[specta::specta]
-pub fn get_available_accelerators() -> crate::managers::transcription::AvailableAccelerators {
-    crate::managers::transcription::get_available_accelerators()
+pub fn change_whisper_gpu_device(app: AppHandle, device: i32) -> Result<(), String> {
+    let mut s = settings::get_settings(&app);
+    s.whisper_gpu_device = device;
+    apply_and_reload_accelerator(&app, s);
+    Ok(())
+}
+
+/// Return which accelerators and GPU devices are available for this build.
+///
+/// First-call cost is dominated by enumerating GPU devices through the
+/// whisper.cpp Metal/Vulkan backend, which loads dynamic libraries and
+/// probes hardware. Run it on the blocking pool so the webview thread
+/// stays responsive — see also the startup pre-warm in `lib.rs`.
+#[tauri::command]
+#[specta::specta]
+pub async fn get_available_accelerators() -> crate::managers::transcription::AvailableAccelerators {
+    tauri::async_runtime::spawn_blocking(crate::managers::transcription::get_available_accelerators)
+        .await
+        .expect("get_available_accelerators panicked")
 }

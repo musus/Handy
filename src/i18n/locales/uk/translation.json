@@ -88,6 +88,10 @@
       "canary-1b-v2": {
         "name": "Canary 1B v2",
         "description": "Точна багатомовна. 25 європейських мов. Підтримує переклад."
+      },
+      "cohere-int8": {
+        "name": "Cohere",
+        "description": "Велика, повільніша, але дуже точна багатомовна модель."
       }
     },
     "errors": {
@@ -259,6 +263,11 @@
         "ort": {
           "title": "Прискорення ONNX",
           "description": "Апаратне прискорення для моделей ONNX (Parakeet, Canary, Moonshine тощо). DirectML на Windows є експериментальним. Моделі можуть не виконувати транскрипцію."
+        },
+        "gpuDevice": {
+          "title": "Пристрій GPU",
+          "description": "Виберіть GPU для інференсу Whisper. Автоматично обирає виділений GPU.",
+          "auto": "Авто"
         }
       },
       "startHidden": {
@@ -542,7 +551,10 @@
     "downloading": "Завантаження... {{progress}}%",
     "installing": "Встановлення...",
     "preparing": "Підготовка...",
-    "checkForUpdates": "Перевірити оновлення"
+    "checkForUpdates": "Перевірити оновлення",
+    "portableUpdateTitle": "Manual update required",
+    "portableUpdateMessage": "Portable installs cannot be updated automatically. To update: download the latest NSIS installer from GitHub Releases, install it to the same folder, then copy your Data/ folder (settings, models, recordings) from the old version to the new one.",
+    "portableUpdateButton": "Open GitHub Releases"
   },
   "common": {
     "loading": "Завантаження...",
@@ -585,7 +597,9 @@
     "noInputDevice": "Не виявлено жодного пристрою введення звуку. Підключіть мікрофон або гарнітуру та спробуйте знову.",
     "recordingFailed": "Не вдалося розпочати запис: {{error}}",
     "modelLoadFailed": "Не вдалося завантажити модель: {{model}}",
-    "modelLoadFailedUnknown": "невідома модель"
+    "modelLoadFailedUnknown": "невідома модель",
+    "pasteFailedTitle": "Не вдалося вставити текст",
+    "pasteFailed": "Не вдалося вставити текст до активної програми."
   },
   "appLanguage": {
     "title": "Мова інтерфейсу",

@@ -88,6 +88,10 @@
       "canary-1b-v2": {
         "name": "Canary 1B v2",
         "description": "Accurate multilingual. 25 European languages. Supports translation."
+      },
+      "cohere-int8": {
+        "name": "Cohere",
+        "description": "A large, slower, but very accurate multilingual model."
       }
     },
     "errors": {
@@ -259,6 +263,11 @@
         "ort": {
           "title": "ONNX Acceleration",
           "description": "Hardware acceleration for ONNX models (Parakeet, Canary, Moonshine, etc.). DirectML on Windows is experimental. Models may fail to transcribe."
+        },
+        "gpuDevice": {
+          "title": "GPU Device",
+          "description": "Select which GPU to use for Whisper inference. Auto picks the dedicated GPU.",
+          "auto": "Auto"
         }
       },
       "startHidden": {
@@ -542,7 +551,10 @@
     "downloading": "Downloading... {{progress}}%",
     "installing": "Installing...",
     "preparing": "Preparing...",
-    "checkForUpdates": "Check for updates"
+    "checkForUpdates": "Check for updates",
+    "portableUpdateTitle": "Manual update required",
+    "portableUpdateMessage": "Portable installs cannot be updated automatically. To update: download the latest NSIS installer from GitHub Releases, install it to the same folder, then copy your Data/ folder (settings, models, recordings) from the old version to the new one.",
+    "portableUpdateButton": "Open GitHub Releases"
   },
   "common": {
     "loading": "Loading...",
@@ -585,7 +597,9 @@
     "noInputDevice": "No audio input device was detected. Please connect a microphone or headset and try again.",
     "recordingFailed": "Failed to start recording: {{error}}",
     "modelLoadFailed": "Failed to load model: {{model}}",
-    "modelLoadFailedUnknown": "unknown model"
+    "modelLoadFailedUnknown": "unknown model",
+    "pasteFailedTitle": "Failed to Paste Text",
+    "pasteFailed": "Text could not be pasted into the active application."
   },
   "appLanguage": {
     "title": "Application Language",

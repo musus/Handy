@@ -88,6 +88,10 @@
       "canary-1b-v2": {
         "name": "Canary 1B v2",
         "description": "Doğru çok dilli. 25 Avrupa dili. Çeviri desteği."
+      },
+      "cohere-int8": {
+        "name": "Cohere",
+        "description": "Büyük, daha yavaş, ancak çok doğru çok dilli bir model."
       }
     },
     "errors": {
@@ -259,6 +263,11 @@
         "ort": {
           "title": "ONNX Hızlandırma",
           "description": "ONNX modelleri için donanım hızlandırma (Parakeet, Canary, Moonshine vb.). Windows'ta DirectML deneyseldir. Modeller transkripsiyon yapamayabilir."
+        },
+        "gpuDevice": {
+          "title": "GPU Aygıtı",
+          "description": "Whisper çıkarımı için hangi GPU'nun kullanılacağını seçin. Otomatik, özel GPU'yu seçer.",
+          "auto": "Otomatik"
         }
       },
       "startHidden": {
@@ -542,7 +551,10 @@
     "downloading": "İndiriliyor... %{{progress}}",
     "installing": "Yükleniyor...",
     "preparing": "Hazırlanıyor...",
-    "checkForUpdates": "Güncellemeleri kontrol et"
+    "checkForUpdates": "Güncellemeleri kontrol et",
+    "portableUpdateTitle": "Manual update required",
+    "portableUpdateMessage": "Portable installs cannot be updated automatically. To update: download the latest NSIS installer from GitHub Releases, install it to the same folder, then copy your Data/ folder (settings, models, recordings) from the old version to the new one.",
+    "portableUpdateButton": "Open GitHub Releases"
   },
   "common": {
     "loading": "Yükleniyor...",
@@ -585,7 +597,9 @@
     "noInputDevice": "Ses giriş aygıtı algılanamadı. Lütfen bir mikrofon veya kulaklık bağlayın ve tekrar deneyin.",
     "recordingFailed": "Kayıt başlatılamadı: {{error}}",
     "modelLoadFailed": "Model yüklenemedi: {{model}}",
-    "modelLoadFailedUnknown": "bilinmeyen model"
+    "modelLoadFailedUnknown": "bilinmeyen model",
+    "pasteFailedTitle": "Metin yapıştırılamadı",
+    "pasteFailed": "Metin etkin uygulamaya yapıştırılamadı."
   },
   "appLanguage": {
     "title": "Uygulama Dili",

@@ -88,6 +88,10 @@
       "canary-1b-v2": {
         "name": "Canary 1B v2",
         "description": "高精度な多言語対応。25のヨーロッパ言語。翻訳対応。"
+      },
+      "cohere-int8": {
+        "name": "Cohere",
+        "description": "大型で低速ですが、非常に高精度な多言語モデル。"
       }
     },
     "errors": {
@@ -259,6 +263,11 @@
         "ort": {
           "title": "ONNX アクセラレーション",
           "description": "ONNX モデルのハードウェアアクセラレーション（Parakeet、Canary、Moonshine など）。Windows の DirectML は実験的です。モデルの文字起こしに失敗する場合があります。"
+        },
+        "gpuDevice": {
+          "title": "GPUデバイス",
+          "description": "Whisper推論に使用するGPUを選択します。自動は専用GPUを選択します。",
+          "auto": "自動"
         }
       },
       "startHidden": {
@@ -542,7 +551,10 @@
     "downloading": "ダウンロード中... {{progress}}%",
     "installing": "インストール中...",
     "preparing": "準備中...",
-    "checkForUpdates": "アップデートを確認"
+    "checkForUpdates": "アップデートを確認",
+    "portableUpdateTitle": "Manual update required",
+    "portableUpdateMessage": "Portable installs cannot be updated automatically. To update: download the latest NSIS installer from GitHub Releases, install it to the same folder, then copy your Data/ folder (settings, models, recordings) from the old version to the new one.",
+    "portableUpdateButton": "Open GitHub Releases"
   },
   "common": {
     "loading": "読み込み中...",
@@ -585,7 +597,9 @@
     "noInputDevice": "オーディオ入力デバイスが検出されませんでした。マイクまたはヘッドセットを接続してから再試行してください。",
     "recordingFailed": "録音の開始に失敗しました: {{error}}",
     "modelLoadFailed": "モデルの読み込みに失敗しました: {{model}}",
-    "modelLoadFailedUnknown": "不明なモデル"
+    "modelLoadFailedUnknown": "不明なモデル",
+    "pasteFailedTitle": "テキストの貼り付けに失敗しました",
+    "pasteFailed": "アクティブなアプリケーションにテキストを貼り付けられませんでした。"
   },
   "appLanguage": {
     "title": "アプリケーション言語",

@@ -88,6 +88,10 @@
       "canary-1b-v2": {
         "name": "Canary 1B v2",
         "description": "Multilingüe preciso. 25 idiomas europeos. Soporta traducción."
+      },
+      "cohere-int8": {
+        "name": "Cohere",
+        "description": "Un modelo grande, más lento, pero muy preciso y multilingüe."
       }
     },
     "errors": {
@@ -259,6 +263,11 @@
         "ort": {
           "title": "Aceleración de ONNX",
           "description": "Aceleración por hardware para modelos ONNX (Parakeet, Canary, Moonshine, etc.). DirectML en Windows es experimental. Los modelos pueden fallar al transcribir."
+        },
+        "gpuDevice": {
+          "title": "Dispositivo GPU",
+          "description": "Seleccione qué GPU usar para la inferencia de Whisper. Auto elige la GPU dedicada.",
+          "auto": "Auto"
         }
       },
       "startHidden": {
@@ -542,7 +551,10 @@
     "downloading": "Descargando... {{progress}}%",
     "installing": "Instalando...",
     "preparing": "Preparando...",
-    "checkForUpdates": "Buscar actualizaciones"
+    "checkForUpdates": "Buscar actualizaciones",
+    "portableUpdateTitle": "Manual update required",
+    "portableUpdateMessage": "Portable installs cannot be updated automatically. To update: download the latest NSIS installer from GitHub Releases, install it to the same folder, then copy your Data/ folder (settings, models, recordings) from the old version to the new one.",
+    "portableUpdateButton": "Open GitHub Releases"
   },
   "common": {
     "loading": "Cargando...",
@@ -585,7 +597,9 @@
     "noInputDevice": "No se detectó ningún dispositivo de entrada de audio. Conecta un micrófono o auriculares e inténtalo de nuevo.",
     "recordingFailed": "Error al iniciar la grabación: {{error}}",
     "modelLoadFailed": "Error al cargar el modelo: {{model}}",
-    "modelLoadFailedUnknown": "modelo desconocido"
+    "modelLoadFailedUnknown": "modelo desconocido",
+    "pasteFailedTitle": "Error al pegar el texto",
+    "pasteFailed": "No se pudo pegar el texto en la aplicación activa."
   },
   "appLanguage": {
     "title": "Idioma de la aplicación",
