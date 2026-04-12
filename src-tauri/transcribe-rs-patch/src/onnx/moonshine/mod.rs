@@ -18,6 +18,7 @@ pub enum MoonshineVariant {
     TinyVi,
     Base,
     BaseEs,
+    BaseJa,
 }
 
 impl MoonshineVariant {
@@ -30,7 +31,7 @@ impl MoonshineVariant {
             | MoonshineVariant::TinyKo
             | MoonshineVariant::TinyUk
             | MoonshineVariant::TinyVi => 6,
-            MoonshineVariant::Base | MoonshineVariant::BaseEs => 8,
+            MoonshineVariant::Base | MoonshineVariant::BaseEs | MoonshineVariant::BaseJa => 8,
         }
     }
 
@@ -47,7 +48,7 @@ impl MoonshineVariant {
             | MoonshineVariant::TinyKo
             | MoonshineVariant::TinyUk
             | MoonshineVariant::TinyVi => 36,
-            MoonshineVariant::Base | MoonshineVariant::BaseEs => 52,
+            MoonshineVariant::Base | MoonshineVariant::BaseEs | MoonshineVariant::BaseJa => 52,
         }
     }
 
@@ -59,7 +60,8 @@ impl MoonshineVariant {
             | MoonshineVariant::TinyZh
             | MoonshineVariant::TinyJa
             | MoonshineVariant::TinyKo
-            | MoonshineVariant::TinyVi => 13,
+            | MoonshineVariant::TinyVi
+            | MoonshineVariant::BaseJa => 13,
         }
     }
 }

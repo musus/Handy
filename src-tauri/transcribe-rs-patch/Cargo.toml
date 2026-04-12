@@ -12,7 +12,7 @@
 [package]
 edition = "2021"
 name = "transcribe-rs"
-version = "0.3.2"
+version = "0.3.8"
 build = false
 autolib = false
 autobins = false
@@ -65,7 +65,7 @@ ort-rocm = [
     "onnx",
     "ort/rocm",
 ]
-whisper-cpp = ["dep:whisper-rs"]
+whisper-cpp = ["dep:whisper-rs", "whisper-rs/raw-api"]
 whisper-metal = [
     "whisper-cpp",
     "whisper-rs/metal",

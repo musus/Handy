@@ -1,6 +1,6 @@
 [package]
 name = "transcribe-rs"
-version = "0.3.2"
+version = "0.3.8"
 edition = "2021"
 description = "A simple library to help you transcribe audio"
 license = "MIT"
@@ -16,7 +16,7 @@ audio-features = ["dep:ndarray", "dep:rustfft"]
 onnx = ["audio-features", "dep:ort", "dep:base64", "dep:regex", "dep:once_cell"]
 
 # Whisper via whisper.cpp (CPU-only by default; add whisper-metal or whisper-vulkan for GPU)
-whisper-cpp = ["dep:whisper-rs"]
+whisper-cpp = ["dep:whisper-rs", "whisper-rs/raw-api"]
 
 # --- Whisper Accelerators ---
 whisper-metal  = ["whisper-cpp", "whisper-rs/metal"]

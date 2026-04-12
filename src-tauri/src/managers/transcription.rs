@@ -320,7 +320,7 @@ impl TranscriptionManager {
             }
             EngineType::Moonshine => {
                 let variant = match model_id {
-                    "moonshine-base-ja" => MoonshineVariant::Base,
+                    "moonshine-base-ja" => MoonshineVariant::BaseJa,
                     "moonshine-base-es" => MoonshineVariant::BaseEs,
                     _ => MoonshineVariant::Base,
                 };
