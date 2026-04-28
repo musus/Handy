@@ -1,0 +1,326 @@
+name: upstream-sync
+
+on:
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  UPSTREAM_REPO: cjpais/Handy
+  FORK_REPO: musus/Handy
+  VERSION_FILE: .github/upstream-version
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      should_sync: ${{ steps.compare.outputs.should_sync }}
+      upstream_tag: ${{ steps.compare.outputs.upstream_tag }}
+      previous_tag: ${{ steps.compare.outputs.previous_tag }}
+      pr_exists: ${{ steps.pr_check.outputs.pr_exists }}
+    steps:
+      - name: Checkout (sparse)
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            .github/upstream-version
+          sparse-checkout-cone-mode: false
+
+      - name: Compare versions
+        id: compare
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          upstream_tag=$(gh api "repos/${UPSTREAM_REPO}/releases/latest" --jq .tag_name)
+          previous_tag=$(tr -d '[:space:]' < "$VERSION_FILE")
+          echo "upstream_tag=${upstream_tag}" >> "$GITHUB_OUTPUT"
+          echo "previous_tag=${previous_tag}" >> "$GITHUB_OUTPUT"
+          if [[ "${upstream_tag}" == "${previous_tag}" ]]; then
+            echo "no new release (current=${previous_tag})"
+            echo "should_sync=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "new release detected: ${previous_tag} -> ${upstream_tag}"
+            echo "should_sync=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check existing PR
+        id: pr_check
+        if: steps.compare.outputs.should_sync == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          branch="sync/upstream-${{ steps.compare.outputs.upstream_tag }}"
+          count=$(gh pr list --repo "${FORK_REPO}" --head "${branch}" --state all --json number --jq 'length')
+          if [[ "${count}" -gt 0 ]]; then
+            echo "PR for ${branch} already exists"
+            echo "pr_exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "pr_exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Save release notes
+        if: steps.compare.outputs.should_sync == 'true' && steps.pr_check.outputs.pr_exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api "repos/${UPSTREAM_REPO}/releases/latest" --jq .body > release-notes.md
+
+      - name: Upload release notes
+        if: steps.compare.outputs.should_sync == 'true' && steps.pr_check.outputs.pr_exists == 'false'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: release-notes.md
+          retention-days: 1
+
+  merge:
+    runs-on: ubuntu-latest
+    needs: detect
+    if: needs.detect.outputs.should_sync == 'true' && needs.detect.outputs.pr_exists == 'false'
+    outputs:
+      conflict_files: ${{ steps.merge_step.outputs.conflict_files }}
+      resolved_files: ${{ steps.merge_step.outputs.resolved_files }}
+      branch: ${{ steps.merge_step.outputs.branch }}
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream remote
+        run: |
+          git remote add upstream "https://github.com/${UPSTREAM_REPO}.git"
+          git fetch upstream tag "${{ needs.detect.outputs.upstream_tag }}" --no-tags
+
+      - name: Merge upstream tag
+        id: merge_step
+        run: |
+          set -uo pipefail
+          new_tag="${{ needs.detect.outputs.upstream_tag }}"
+          branch="sync/upstream-${new_tag}"
+          echo "branch=${branch}" >> "$GITHUB_OUTPUT"
+
+          git checkout -b "${branch}"
+
+          # try merge; conflicts allowed
+          git merge --no-ff --no-commit "tags/${new_tag}" || true
+
+          resolved=()
+          # Cargo.lock -> theirs (build will regen)
+          if git status --porcelain | grep -q '^UU src-tauri/Cargo.lock'; then
+            git checkout --theirs src-tauri/Cargo.lock
+            git add src-tauri/Cargo.lock
+            resolved+=("src-tauri/Cargo.lock (theirs)")
+          fi
+          # CLAUDE.md -> ours (fork-specific)
+          if git status --porcelain | grep -qE '^(UU|UD|DU) CLAUDE\.md'; then
+            git checkout --ours CLAUDE.md || true
+            git add CLAUDE.md
+            resolved+=("CLAUDE.md (ours)")
+          fi
+          # AGENTS.md -> theirs (upstream new file)
+          if git status --porcelain | grep -qE '^(UU|AU|UA) AGENTS\.md'; then
+            git checkout --theirs AGENTS.md || true
+            git add AGENTS.md
+            resolved+=("AGENTS.md (theirs)")
+          fi
+
+          # Cargo.toml: take theirs (upstream version), then re-ensure patch entry below
+          if git status --porcelain | grep -q '^UU src-tauri/Cargo.toml'; then
+            git checkout --theirs src-tauri/Cargo.toml
+            git add src-tauri/Cargo.toml
+            resolved+=("src-tauri/Cargo.toml (theirs + patch re-applied)")
+          fi
+
+          # ensure patch entry & sync version (run regardless - idempotent)
+          chmod +x scripts/ensure-cargo-patch.sh scripts/sync-transcribe-patch-version.sh
+          ./scripts/ensure-cargo-patch.sh
+          ./scripts/sync-transcribe-patch-version.sh
+          git add src-tauri/Cargo.toml src-tauri/transcribe-rs-patch/Cargo.toml || true
+
+          # update upstream-version file
+          echo "${new_tag}" > "$VERSION_FILE"
+          git add "$VERSION_FILE"
+
+          # remaining unresolved files
+          conflict_files=$(git diff --name-only --diff-filter=U | tr '\n' ',' | sed 's/,$//')
+
+          # commit message based on conflict state
+          if [[ -z "${conflict_files}" ]]; then
+            commit_msg="merge: sync with upstream ${UPSTREAM_REPO} ${new_tag}"
+          else
+            # add unmerged files as-is so they can be reviewed
+            git diff --name-only --diff-filter=U | xargs -r git add
+            commit_msg="merge: sync upstream ${new_tag} (CONFLICTS: needs manual resolution)"
+          fi
+
+          git commit -m "${commit_msg}"
+
+          # join resolved array
+          IFS=$'\n'
+          resolved_str="${resolved[*]:-}"
+          {
+            echo "resolved_files<<EOF"
+            for f in "${resolved[@]:-}"; do
+              [[ -n "$f" ]] && echo "- $f"
+            done
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "conflict_files<<EOF"
+            if [[ -n "${conflict_files}" ]]; then
+              echo "${conflict_files}" | tr ',' '\n' | sed 's/^/- /'
+            else
+              echo "(none)"
+            fi
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Push branch
+        run: git push origin "${{ steps.merge_step.outputs.branch }}"
+
+  build-check:
+    runs-on: macos-14
+    needs: [detect, merge]
+    if: needs.merge.result == 'success'
+    continue-on-error: true
+    outputs:
+      cargo_check: ${{ steps.cargo.outcome }}
+      lint: ${{ steps.lint.outcome }}
+    steps:
+      - name: Checkout sync branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.merge.outputs.branch }}
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install cmake
+        run: brew install cmake
+
+      - name: Download silero_vad model
+        run: |
+          mkdir -p src-tauri/resources/models
+          curl -fsSL -o src-tauri/resources/models/silero_vad_v4.onnx \
+            https://blob.handy.computer/silero_vad_v4.onnx
+
+      - name: Bun install
+        run: bun install
+
+      - name: Lint & format check
+        id: lint
+        run: |
+          bun run lint
+          bun run format:check
+
+      - name: Cargo check
+        id: cargo
+        env:
+          CMAKE_POLICY_VERSION_MINIMUM: "3.5"
+        run: |
+          export SDKROOT=$(xcrun --show-sdk-path)
+          export CFLAGS="-isysroot $SDKROOT"
+          cargo check --manifest-path src-tauri/Cargo.toml
+
+  pr:
+    runs-on: ubuntu-latest
+    needs: [detect, merge, build-check]
+    if: always() && needs.merge.result == 'success'
+    steps:
+      - name: Checkout sync branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.merge.outputs.branch }}
+          fetch-depth: 0
+
+      - name: Add upstream remote
+        run: |
+          git remote add upstream "https://github.com/${UPSTREAM_REPO}.git"
+          git fetch upstream --tags --no-recurse-submodules
+
+      - name: Download release notes
+        uses: actions/download-artifact@v4
+        with:
+          name: release-notes
+          path: .
+
+      - name: Build PR body
+        id: build_body
+        env:
+          PREV_TAG: ${{ needs.detect.outputs.previous_tag }}
+          NEW_TAG: ${{ needs.detect.outputs.upstream_tag }}
+          RESOLVED: ${{ needs.merge.outputs.resolved_files }}
+          CONFLICTS: ${{ needs.merge.outputs.conflict_files }}
+          CARGO_STATUS: ${{ needs.build-check.outputs.cargo_check || 'skipped' }}
+          LINT_STATUS: ${{ needs.build-check.outputs.lint || 'skipped' }}
+        run: |
+          set -euo pipefail
+          commits=$(git log --oneline "tags/${PREV_TAG}..tags/${NEW_TAG}" 2>/dev/null || echo "(commit log unavailable)")
+          release_notes=$(cat release-notes.md 2>/dev/null || echo "(release notes unavailable)")
+
+          {
+            echo "## Upstream sync: \`${PREV_TAG}\` → \`${NEW_TAG}\`"
+            echo
+            echo "自動生成 PR (\`upstream-sync.yml\`)。"
+            echo
+            echo "## upstream リリースノート"
+            echo
+            echo "${release_notes}"
+            echo
+            echo "## upstream commits"
+            echo
+            echo '```'
+            echo "${commits}"
+            echo '```'
+            echo
+            echo "## 機械解決済み"
+            echo
+            echo "${RESOLVED}"
+            echo
+            echo "## 残存コンフリクト (手動解決必要)"
+            echo
+            echo "${CONFLICTS}"
+            echo
+            echo "## ビルド検証 (macos-14)"
+            echo
+            echo "- cargo check: \`${CARGO_STATUS}\`"
+            echo "- lint & format:check: \`${LINT_STATUS}\`"
+            echo
+            echo "## 手動対応チェックリスト"
+            echo
+            echo "- [ ] \`src-tauri/src/managers/model.rs\` のセマンティックコンフリクト解決"
+            echo "- [ ] \`src-tauri/src/managers/transcription.rs\` のセマンティックコンフリクト解決 (CJK token rate / MoonshineParams 維持)"
+            echo "- [ ] transcribe-rs パッチに API追加が必要か確認 (\`~/.cargo/registry/src/index.crates-io-*/transcribe-rs-X.Y.Z/\` と \`src-tauri/transcribe-rs-patch/\` の diff)"
+            echo "- [ ] ローカルで \`bun run tauri dev\` 起動確認"
+            echo "- [ ] 日本語Moonshineモデルで長文転写確認"
+          } > pr-body.md
+
+      - name: Create PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh pr create \
+            --repo "${FORK_REPO}" \
+            --base main \
+            --head "${{ needs.merge.outputs.branch }}" \
+            --title "merge: sync upstream ${UPSTREAM_REPO} ${{ needs.detect.outputs.upstream_tag }}" \
+            --body-file pr-body.md
