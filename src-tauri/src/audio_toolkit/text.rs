@@ -262,6 +262,29 @@ fn get_filler_words_for_language(lang: &str) -> &'static [&'static str] {
 
 static MULTI_SPACE_PATTERN: Lazy<Regex> = Lazy::new(|| Regex::new(r"\s{2,}").unwrap());
 
+// Matches an ASCII whitespace run between two CJK characters.
+// Moonshine's SentencePiece tokenizer prefixes each token with U+2581, which
+// after decoding leaves spaces between CJK chars (e.g. "こ ん に ち は").
+static CJK_SPACE_PATTERN: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(
+        r"([\u{3000}-\u{303F}\u{3040}-\u{309F}\u{30A0}-\u{30FF}\u{3400}-\u{4DBF}\u{4E00}-\u{9FFF}])\s+([\u{3000}-\u{303F}\u{3040}-\u{309F}\u{30A0}-\u{30FF}\u{3400}-\u{4DBF}\u{4E00}-\u{9FFF}])",
+    )
+    .unwrap()
+});
+
+// `replace_all` consumes both captured chars per match, so consecutive CJK
+// chars need a fixpoint loop to fully collapse (e.g. "あ い う" → "あい う" → "あいう").
+fn remove_cjk_interchar_spaces(text: &str) -> String {
+    let mut current = text.to_string();
+    loop {
+        let next = CJK_SPACE_PATTERN.replace_all(&current, "$1$2").to_string();
+        if next == current {
+            return next;
+        }
+        current = next;
+    }
+}
+
 /// Collapses repeated words (3+ repetitions) to a single instance.
 /// E.g., "wh wh wh wh" -> "wh", "I I I I" -> "I"
 fn collapse_stutters(text: &str) -> String {
@@ -342,6 +365,9 @@ pub fn filter_transcription_output(
 
     // Collapse repeated 1-2 letter words (stutter artifacts like "wh wh wh wh")
     filtered = collapse_stutters(&filtered);
+
+    // Remove spurious spaces between adjacent CJK characters (Moonshine ja artifact)
+    filtered = remove_cjk_interchar_spaces(&filtered);
 
     // Clean up multiple spaces to single space
     filtered = MULTI_SPACE_PATTERN.replace_all(&filtered, " ").to_string();
@@ -579,6 +605,55 @@ mod tests {
         let custom_words = vec!["MacBook Pro".to_string()];
         let result = apply_custom_words(text, &custom_words, 0.5);
         assert!(result.contains("MacBook"));
+    }
+
+    #[test]
+    fn test_cjk_japanese_hiragana_spaces_removed() {
+        let text = "こ ん に ち は";
+        let result = filter_transcription_output(text, "ja", &None);
+        assert_eq!(result, "こんにちは");
+    }
+
+    #[test]
+    fn test_cjk_kanji_hiragana_mixed() {
+        let text = "今日 は い い 天 気 で す";
+        let result = filter_transcription_output(text, "ja", &None);
+        assert_eq!(result, "今日はいい天気です");
+    }
+
+    #[test]
+    fn test_cjk_katakana_spaces_removed() {
+        let text = "コ ン ピ ュ ー タ";
+        let result = filter_transcription_output(text, "ja", &None);
+        assert_eq!(result, "コンピュータ");
+    }
+
+    #[test]
+    fn test_cjk_mixed_japanese_english_preserves_ascii_space() {
+        let text = "こ れ は Hello World で す";
+        let result = filter_transcription_output(text, "ja", &None);
+        assert_eq!(result, "これは Hello World です");
+    }
+
+    #[test]
+    fn test_cjk_does_not_affect_english() {
+        let text = "Hello World this is a test";
+        let result = filter_transcription_output(text, "en", &None);
+        assert_eq!(result, "Hello World this is a test");
+    }
+
+    #[test]
+    fn test_cjk_with_punctuation() {
+        let text = "こ ん に ち は 、 世 界";
+        let result = filter_transcription_output(text, "ja", &None);
+        assert_eq!(result, "こんにちは、世界");
+    }
+
+    #[test]
+    fn test_cjk_chinese_kanji() {
+        let text = "你 好 世 界";
+        let result = filter_transcription_output(text, "zh", &None);
+        assert_eq!(result, "你好世界");
     }
 
     #[test]
