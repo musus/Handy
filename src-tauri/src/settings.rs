@@ -430,6 +430,10 @@ pub struct AppSettings {
     pub whisper_gpu_device: i32,
     #[serde(default)]
     pub extra_recording_buffer_ms: u64,
+    #[serde(default = "default_duck_volume_percent")]
+    pub duck_volume_percent: u8,
+    #[serde(default = "default_duck_fade_ms")]
+    pub duck_fade_ms: u16,
 }
 
 fn default_model() -> String {
@@ -814,7 +818,17 @@ pub fn get_default_settings() -> AppSettings {
         ort_accelerator: OrtAcceleratorSetting::default(),
         whisper_gpu_device: default_whisper_gpu_device(),
         extra_recording_buffer_ms: 0,
+        duck_volume_percent: default_duck_volume_percent(),
+        duck_fade_ms: default_duck_fade_ms(),
     }
+}
+
+fn default_duck_volume_percent() -> u8 {
+    15
+}
+
+fn default_duck_fade_ms() -> u16 {
+    120
 }
 
 impl AppSettings {

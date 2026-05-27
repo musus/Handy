@@ -61,6 +61,7 @@ bun run tauri build
 ### 動作確認
 
 ビルド成果物：
+
 - `src-tauri/target/release/bundle/macos/Handy.app`
 - `src-tauri/target/release/bundle/dmg/Handy_<version>_aarch64.dmg`
 

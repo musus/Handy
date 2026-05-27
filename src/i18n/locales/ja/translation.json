@@ -236,6 +236,15 @@
       "volume": {
         "title": "音量",
         "description": "音声フィードバックの音量を調整"
+      },
+      "duckLevel": {
+        "title": "ダックレベル",
+        "description": "録音中の目標音量 (macOS)。0% = 完全ミュート (従来挙動)",
+        "fullMute": "完全ミュート"
+      },
+      "duckFade": {
+        "title": "フェード時間",
+        "description": "システム音量を下げる/戻すフェード時間 (macOS)"
       }
     },
     "advanced": {

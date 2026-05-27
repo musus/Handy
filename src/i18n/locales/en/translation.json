@@ -236,6 +236,15 @@
       "volume": {
         "title": "Volume",
         "description": "Adjust the volume of audio feedback sounds"
+      },
+      "duckLevel": {
+        "title": "Duck Level",
+        "description": "Target volume while recording (macOS). 0% = full mute (original behavior).",
+        "fullMute": "Full mute"
+      },
+      "duckFade": {
+        "title": "Fade Duration",
+        "description": "Fade-in/out time when ducking system audio (macOS)"
       }
     },
     "advanced": {

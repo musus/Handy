@@ -10,13 +10,17 @@ import { AudioFeedback } from "../AudioFeedback";
 import { useSettings } from "../../../hooks/useSettings";
 import { VolumeSlider } from "../VolumeSlider";
 import { MuteWhileRecording } from "../MuteWhileRecording";
+import { DuckLevelSlider } from "../DuckLevelSlider";
+import { DuckFadeSlider } from "../DuckFadeSlider";
 import { ModelSettingsCard } from "./ModelSettingsCard";
 
 export const GeneralSettings: React.FC = () => {
   const { t } = useTranslation();
   const { audioFeedbackEnabled, getSetting } = useSettings();
   const pushToTalk = getSetting("push_to_talk");
+  const muteEnabled = getSetting("mute_while_recording") ?? false;
   const isLinux = type() === "linux";
+  const isMacOS = type() === "macos";
   return (
     <div className="max-w-3xl w-full mx-auto space-y-6">
       <SettingsGroup title={t("settings.general.title")}>
@@ -31,6 +35,12 @@ export const GeneralSettings: React.FC = () => {
       <SettingsGroup title={t("settings.sound.title")}>
         <MicrophoneSelector descriptionMode="tooltip" grouped={true} />
         <MuteWhileRecording descriptionMode="tooltip" grouped={true} />
+        {isMacOS && (
+          <>
+            <DuckLevelSlider disabled={!muteEnabled} />
+            <DuckFadeSlider disabled={!muteEnabled} />
+          </>
+        )}
         <AudioFeedback descriptionMode="tooltip" grouped={true} />
         <OutputDeviceSelector
           descriptionMode="tooltip"

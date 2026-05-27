@@ -99,6 +99,158 @@ fn set_mute(mute: bool) {
     }
 }
 
+#[cfg(target_os = "macos")]
+mod macos_coreaudio {
+    use coreaudio_sys::{
+        kAudioDevicePropertyScopeOutput, kAudioDevicePropertyVolumeScalar,
+        kAudioHardwarePropertyDefaultOutputDevice, kAudioObjectPropertyElementMain,
+        kAudioObjectPropertyScopeGlobal, kAudioObjectSystemObject, AudioDeviceID,
+        AudioObjectGetPropertyData, AudioObjectPropertyAddress, AudioObjectSetPropertyData,
+    };
+    use std::mem::size_of;
+    use std::ptr;
+
+    pub fn default_output_device() -> Option<AudioDeviceID> {
+        let mut id: AudioDeviceID = 0;
+        let mut size = size_of::<AudioDeviceID>() as u32;
+        let addr = AudioObjectPropertyAddress {
+            mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain,
+        };
+        let status = unsafe {
+            AudioObjectGetPropertyData(
+                kAudioObjectSystemObject,
+                &addr,
+                0,
+                ptr::null(),
+                &mut size,
+                &mut id as *mut _ as *mut _,
+            )
+        };
+        if status == 0 {
+            Some(id)
+        } else {
+            None
+        }
+    }
+
+    pub fn get_volume(device: AudioDeviceID) -> Option<f32> {
+        let mut vol: f32 = 0.0;
+        let mut size = size_of::<f32>() as u32;
+        let addr = AudioObjectPropertyAddress {
+            mSelector: kAudioDevicePropertyVolumeScalar,
+            mScope: kAudioDevicePropertyScopeOutput,
+            mElement: kAudioObjectPropertyElementMain,
+        };
+        let status = unsafe {
+            AudioObjectGetPropertyData(
+                device,
+                &addr,
+                0,
+                ptr::null(),
+                &mut size,
+                &mut vol as *mut _ as *mut _,
+            )
+        };
+        if status == 0 {
+            Some(vol)
+        } else {
+            // マスター要素にボリュームが無いデバイスはステレオの channel 1 を試す
+            let addr2 = AudioObjectPropertyAddress {
+                mSelector: kAudioDevicePropertyVolumeScalar,
+                mScope: kAudioDevicePropertyScopeOutput,
+                mElement: 1,
+            };
+            let mut size2 = size_of::<f32>() as u32;
+            let s2 = unsafe {
+                AudioObjectGetPropertyData(
+                    device,
+                    &addr2,
+                    0,
+                    ptr::null(),
+                    &mut size2,
+                    &mut vol as *mut _ as *mut _,
+                )
+            };
+            if s2 == 0 {
+                Some(vol)
+            } else {
+                None
+            }
+        }
+    }
+
+    pub fn set_volume(device: AudioDeviceID, vol: f32) {
+        let v = vol.clamp(0.0, 1.0);
+        // master 要素 + channel 1, 2 全部試す (デバイス差異吸収)
+        for element in [kAudioObjectPropertyElementMain, 1, 2] {
+            let addr = AudioObjectPropertyAddress {
+                mSelector: kAudioDevicePropertyVolumeScalar,
+                mScope: kAudioDevicePropertyScopeOutput,
+                mElement: element,
+            };
+            unsafe {
+                AudioObjectSetPropertyData(
+                    device,
+                    &addr,
+                    0,
+                    ptr::null(),
+                    size_of::<f32>() as u32,
+                    &v as *const _ as *const _,
+                );
+            }
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn macos_duck_with_fade(target_pct: u8, fade_ms: u16, saved_volume: Arc<Mutex<Option<u8>>>) {
+    let device = match macos_coreaudio::default_output_device() {
+        Some(d) => d,
+        None => return,
+    };
+    let current = match macos_coreaudio::get_volume(device) {
+        Some(v) => v,
+        None => return,
+    };
+    *saved_volume.lock().unwrap() = Some((current * 100.0).round().clamp(0.0, 100.0) as u8);
+
+    let target = current * (target_pct.min(100) as f32 / 100.0);
+    const STEPS: u16 = 8;
+    let step_delay =
+        Duration::from_micros(((fade_ms.max(1) as u64 * 1000) / STEPS as u64).max(1));
+    for i in 1..=STEPS {
+        let t = i as f32 / STEPS as f32;
+        let eased = 1.0 - (1.0 - t).powi(3);
+        macos_coreaudio::set_volume(device, current + (target - current) * eased);
+        if i < STEPS {
+            std::thread::sleep(step_delay);
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn macos_restore_with_fade(target_pct: u8, fade_ms: u16, saved: u8) {
+    let device = match macos_coreaudio::default_output_device() {
+        Some(d) => d,
+        None => return,
+    };
+    let saved_f = saved as f32 / 100.0;
+    let start = saved_f * (target_pct.min(100) as f32 / 100.0);
+    const STEPS: u16 = 8;
+    let step_delay =
+        Duration::from_micros(((fade_ms.max(1) as u64 * 1000) / STEPS as u64).max(1));
+    for i in 1..=STEPS {
+        let t = i as f32 / STEPS as f32;
+        let eased = 1.0 - (1.0 - t).powi(3);
+        macos_coreaudio::set_volume(device, start + (saved_f - start) * eased);
+        if i < STEPS {
+            std::thread::sleep(step_delay);
+        }
+    }
+}
+
 const WHISPER_SAMPLE_RATE: usize = 16000;
 
 /* ──────────────────────────────────────────────────────────────── */
@@ -152,6 +304,7 @@ pub struct AudioRecordingManager {
     is_open: Arc<Mutex<bool>>,
     is_recording: Arc<Mutex<bool>>,
     did_mute: Arc<Mutex<bool>>,
+    saved_volume: Arc<Mutex<Option<u8>>>,
     close_generation: Arc<AtomicU64>,
 }
 
@@ -175,6 +328,7 @@ impl AudioRecordingManager {
             is_open: Arc::new(Mutex::new(false)),
             is_recording: Arc::new(Mutex::new(false)),
             did_mute: Arc::new(Mutex::new(false)),
+            saved_volume: Arc::new(Mutex::new(None)),
             close_generation: Arc::new(AtomicU64::new(0)),
         };
 
@@ -241,26 +395,63 @@ impl AudioRecordingManager {
 
     /* ---------- microphone life-cycle -------------------------------------- */
 
-    /// Applies mute if mute_while_recording is enabled and stream is open
+    /// Applies mute if mute_while_recording is enabled and stream is open.
+    /// macOS: duck_volume_percent > 0 のときはフェード付き ducking (低音量で鳴り続ける)
     pub fn apply_mute(&self) {
         let settings = get_settings(&self.app_handle);
         let mut did_mute_guard = self.did_mute.lock().unwrap();
 
-        if settings.mute_while_recording && *self.is_open.lock().unwrap() {
-            set_mute(true);
-            *did_mute_guard = true;
-            debug!("Mute applied");
+        if !settings.mute_while_recording || !*self.is_open.lock().unwrap() {
+            return;
         }
+
+        #[cfg(target_os = "macos")]
+        {
+            if settings.duck_volume_percent > 0 {
+                let pct = settings.duck_volume_percent;
+                let fade = settings.duck_fade_ms;
+                let saved_ref = Arc::clone(&self.saved_volume);
+                // osascript 起動 (~30-70ms) も別スレッドへ → caller は即時 return
+                std::thread::spawn(move || {
+                    macos_duck_with_fade(pct, fade, saved_ref);
+                });
+                *did_mute_guard = true;
+                debug!("Duck applied: {}% target, {}ms fade", pct, fade);
+                return;
+            }
+        }
+
+        set_mute(true);
+        *did_mute_guard = true;
+        debug!("Mute applied");
     }
 
     /// Removes mute if it was applied
     pub fn remove_mute(&self) {
         let mut did_mute_guard = self.did_mute.lock().unwrap();
-        if *did_mute_guard {
-            set_mute(false);
-            *did_mute_guard = false;
-            debug!("Mute removed");
+        if !*did_mute_guard {
+            return;
         }
+
+        #[cfg(target_os = "macos")]
+        {
+            let saved_opt = self.saved_volume.lock().unwrap().take();
+            if let Some(saved) = saved_opt {
+                let settings = get_settings(&self.app_handle);
+                let pct = settings.duck_volume_percent.max(1);
+                let fade = settings.duck_fade_ms;
+                std::thread::spawn(move || {
+                    macos_restore_with_fade(pct, fade, saved);
+                });
+                *did_mute_guard = false;
+                debug!("Duck removed: -> {} ({}ms)", saved, fade);
+                return;
+            }
+        }
+
+        set_mute(false);
+        *did_mute_guard = false;
+        debug!("Mute removed");
     }
 
     pub fn preload_vad(&self) -> Result<(), anyhow::Error> {

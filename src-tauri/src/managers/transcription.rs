@@ -324,12 +324,8 @@ impl TranscriptionManager {
                     "moonshine-base-es" => MoonshineVariant::BaseEs,
                     _ => MoonshineVariant::Base,
                 };
-                let engine = MoonshineModel::load(
-                    &model_path,
-                    variant,
-                    &Quantization::default(),
-                )
-                .map_err(|e| {
+                let engine = MoonshineModel::load(&model_path, variant, &Quantization::default())
+                    .map_err(|e| {
                     let error_msg = format!("Failed to load moonshine model {}: {}", model_id, e);
                     emit_loading_failed(&error_msg);
                     anyhow::anyhow!(error_msg)
@@ -581,9 +577,7 @@ impl TranscriptionManager {
                             let token_rate: f32 = if is_cjk { 13.0 } else { 6.0 };
                             let audio_duration = audio.len() as f32 / 16000.0;
                             let params = MoonshineParams {
-                                max_length: Some(
-                                    (audio_duration * token_rate).ceil() as usize,
-                                ),
+                                max_length: Some((audio_duration * token_rate).ceil() as usize),
                                 ..Default::default()
                             };
                             moonshine_engine
