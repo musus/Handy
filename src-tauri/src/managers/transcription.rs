@@ -36,6 +36,16 @@ use transcribe_rs::{
 const STREAM_PERF_LOG_INTERVAL: Duration = Duration::from_secs(5);
 const STREAM_FINALIZE_REPLY_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// Minimum pause between rebatch passes of the live-preview buffer.
+const REBATCH_MIN_INTERVAL: Duration = Duration::from_millis(400);
+/// Skip live passes below this duration (the model rejects < 0.1s; anything
+/// shorter than this yields no useful text anyway).
+const REBATCH_MIN_AUDIO_SECS: f32 = 0.2;
+/// Freeze live updates beyond this duration (the model rejects > 64s).
+const REBATCH_LIVE_MAX_SECS: f32 = 60.0;
+/// Hard cap for the single finalize pass (the model limit is 64s).
+const REBATCH_FINALIZE_MAX_SECS: f32 = 63.5;
+
 #[derive(Clone, Debug, Serialize)]
 pub struct ModelStateEvent {
     pub event_type: String,
@@ -840,9 +850,21 @@ impl TranscriptionManager {
             }
         };
 
-        // Only transcribe-cpp models expose streaming; ONNX engines fall back to
-        // batch. The loaded session (not the ModelManager copy) is the source of
-        // truth for run-path capabilities.
+        // Batch-only ONNX engines with a fast enough transcribe can fake
+        // streaming by periodically re-transcribing the accumulated buffer.
+        if matches!(&engine, LoadedEngine::Moonshine(_)) {
+            let outcome = self.run_rebatch_stream_loop(&mut engine, &rx, &model_id);
+            // Return the engine before replying so a batch fallback can use it.
+            self.return_engine(engine, &model_id);
+            if let Some((reply, result)) = outcome {
+                let _ = reply.send(result);
+            }
+            return;
+        }
+
+        // Only transcribe-cpp models expose native streaming; other ONNX
+        // engines fall back to batch. The loaded session (not the ModelManager
+        // copy) is the source of truth for run-path capabilities.
         let (supports_streaming, supports_translate, languages) = match &engine {
             LoadedEngine::TranscribeCpp(session) => {
                 let model = session.model();
@@ -1021,6 +1043,137 @@ impl TranscriptionManager {
         }
         // `_worker` drops here, clearing this worker's active/lease flags after
         // the engine has been returned to the pool.
+    }
+
+    /// Pseudo-streaming loop for batch-only engines: accumulate fed frames and
+    /// re-transcribe the whole buffer at a throttled cadence, emitting the full
+    /// text as `tentative`. `committed` stays empty — the overlay renders an
+    /// ASCII space after the committed span, which would land mid-word in CJK
+    /// text if a stable prefix were promoted.
+    ///
+    /// Returns `None` when no reply is owed (cancel or channel disconnect), or
+    /// `Some((reply, raw_text))` for the finalize handshake; a `None` raw_text
+    /// tells the caller to fall back to batch transcription. The caller must
+    /// return the engine before sending the reply.
+    fn run_rebatch_stream_loop(
+        &self,
+        engine: &mut LoadedEngine,
+        rx: &mpsc::Receiver<StreamCmd>,
+        model_id: &str,
+    ) -> Option<(mpsc::Sender<Option<String>>, Option<String>)> {
+        let settings = get_settings(&self.app_handle);
+        let mut buffer: Vec<f32> = Vec::new();
+        let mut samples_at_last_infer = 0usize;
+        let mut last_raw: Option<String> = None;
+        let mut last_display = String::new();
+        let mut last_infer_done: Option<Instant> = None;
+        let mut live_disabled = false;
+
+        self.stream_active.store(true, Ordering::Release);
+        self.touch_activity();
+        info!("Live preview (rebatch) started for model '{}'", model_id);
+
+        loop {
+            let first = match rx.recv() {
+                Ok(cmd) => cmd,
+                Err(_) => return None,
+            };
+            // Drain everything queued behind the first command so each pass
+            // sees the freshest buffer and feeds never back up while inference
+            // is slower than real time.
+            let mut finalize: Option<mpsc::Sender<Option<String>>> = None;
+            let mut cmd = Some(first);
+            loop {
+                match cmd {
+                    Some(StreamCmd::Feed(pcm)) => buffer.extend_from_slice(&pcm),
+                    // The channel is FIFO, so every frame fed before finalize
+                    // has already been drained into the buffer at this point.
+                    Some(StreamCmd::Finalize(reply)) => {
+                        finalize = Some(reply);
+                        break;
+                    }
+                    Some(StreamCmd::Cancel) => return None,
+                    None => break,
+                }
+                cmd = rx.try_recv().ok();
+            }
+
+            let secs = buffer.len() as f32 / 16_000.0;
+
+            if let Some(reply) = finalize {
+                let result = if secs < 0.1 {
+                    // Too short for the model; the batch fallback reports it.
+                    None
+                } else if buffer.len() == samples_at_last_infer {
+                    // No new audio since the last live pass — reuse its text.
+                    last_raw.clone()
+                } else if secs > REBATCH_FINALIZE_MAX_SECS {
+                    warn!(
+                        "Live preview: {:.1}s buffer exceeds the {}s model limit; \
+                         keeping the last live text",
+                        secs, REBATCH_FINALIZE_MAX_SECS
+                    );
+                    last_raw.clone()
+                } else {
+                    match rebatch_transcribe(engine, &buffer) {
+                        Ok(raw) => Some(raw),
+                        Err(e) => {
+                            error!(
+                                "rebatch finalize failed: {}; falling back to batch \
+                                 transcription",
+                                e
+                            );
+                            None
+                        }
+                    }
+                };
+                return Some((reply, result));
+            }
+
+            if live_disabled
+                || buffer.len() == samples_at_last_infer
+                || secs < REBATCH_MIN_AUDIO_SECS
+                || last_infer_done.is_some_and(|done| done.elapsed() < REBATCH_MIN_INTERVAL)
+            {
+                continue;
+            }
+            if secs > REBATCH_LIVE_MAX_SECS {
+                info!(
+                    "Live preview: buffer exceeded {}s; freezing live updates",
+                    REBATCH_LIVE_MAX_SECS
+                );
+                live_disabled = true;
+                continue;
+            }
+
+            self.touch_activity();
+            let started = Instant::now();
+            match rebatch_transcribe(engine, &buffer) {
+                Ok(raw) => {
+                    samples_at_last_infer = buffer.len();
+                    let display = filter_transcription_output(
+                        &raw,
+                        &settings.app_language,
+                        &settings.custom_filler_words,
+                    );
+                    last_raw = Some(raw);
+                    if display != last_display {
+                        self.emit_stream_text("", &display);
+                        last_display = display;
+                    }
+                    debug!(
+                        "rebatch pass: {:.2}s audio in {:?}",
+                        secs,
+                        started.elapsed()
+                    );
+                }
+                Err(e) => {
+                    warn!("rebatch live pass failed: {}; freezing live updates", e);
+                    live_disabled = true;
+                }
+            }
+            last_infer_done = Some(Instant::now());
+        }
     }
 
     /// Return the leased engine to the mutex, unless the model was switched or
@@ -1653,6 +1806,17 @@ fn cpp_translation_task(
 /// finalizes or cancels. Used when streaming can't actually run (model not
 /// loaded / not streaming-capable) so the finalize handshake still completes
 /// and the caller falls back to batch transcription.
+/// Single full-buffer transcription pass for the rebatch pseudo-streaming loop.
+fn rebatch_transcribe(engine: &mut LoadedEngine, samples: &[f32]) -> Result<String> {
+    match engine {
+        LoadedEngine::Moonshine(moonshine_engine) => moonshine_engine
+            .transcribe(samples, &TranscribeOptions::default())
+            .map(|r| r.text)
+            .map_err(|e| anyhow::anyhow!("Moonshine transcription failed: {}", e)),
+        _ => Err(anyhow::anyhow!("engine does not support rebatch streaming")),
+    }
+}
+
 fn drain_until_finalize(rx: mpsc::Receiver<StreamCmd>) {
     while let Ok(cmd) = rx.recv() {
         match cmd {

@@ -76,7 +76,7 @@ pub struct ModelInfo {
     pub supported_languages: Vec<String>, // Languages this model can transcribe
     pub supports_language_selection: bool, // Whether the user can explicitly pick a language
     pub is_custom: bool,            // Whether this is a user-provided custom model
-    pub supports_streaming: bool, // Whether this model supports live streaming preview (transcribe-cpp)
+    pub supports_streaming: bool, // Whether this model supports live streaming preview (transcribe-cpp native or rebatch pseudo-streaming)
     pub supports_language_detection: bool, // Whether the model can auto-detect language (gates the "Auto" option)
 }
 
@@ -778,7 +778,9 @@ impl ModelManager {
                 supported_languages: vec!["ja".to_string()],
                 supports_language_selection: false,
                 is_custom: false,
-                supports_streaming: false,
+                // Served by the rebatch pseudo-streaming loop (periodic
+                // re-transcription), not native transcribe-cpp streaming.
+                supports_streaming: true,
                 supports_language_detection: true,
             },
         );
