@@ -219,6 +219,15 @@
       "volume": {
         "title": "볼륨",
         "description": "오디오 피드백 사운드의 볼륨 조절"
+      },
+      "duckLevel": {
+        "title": "덕킹 레벨",
+        "description": "녹음 중 목표 볼륨 (macOS). 0% = 완전 음소거 (기존 동작).",
+        "fullMute": "완전 음소거"
+      },
+      "duckFade": {
+        "title": "페이드 시간",
+        "description": "시스템 볼륨을 낮추거나 복원할 때의 페이드 시간 (macOS)"
       }
     },
     "models": {

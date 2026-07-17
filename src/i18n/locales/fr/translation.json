@@ -237,6 +237,15 @@
       "volume": {
         "title": "Volume",
         "description": "Ajuster le volume du signal sonore"
+      },
+      "duckLevel": {
+        "title": "Niveau d'atténuation",
+        "description": "Volume cible pendant l'enregistrement (macOS). 0 % = coupure totale (comportement d'origine).",
+        "fullMute": "Coupure totale"
+      },
+      "duckFade": {
+        "title": "Durée du fondu",
+        "description": "Durée du fondu lors de la baisse/restauration du volume système (macOS)"
       }
     },
     "advanced": {

@@ -237,6 +237,15 @@
       "volume": {
         "title": "Âm lượng",
         "description": "Điều chỉnh âm lượng của âm thanh phản hồi"
+      },
+      "duckLevel": {
+        "title": "Mức giảm âm",
+        "description": "Âm lượng mục tiêu khi ghi âm (macOS). 0% = tắt tiếng hoàn toàn (hành vi gốc).",
+        "fullMute": "Tắt tiếng hoàn toàn"
+      },
+      "duckFade": {
+        "title": "Thời gian chuyển",
+        "description": "Thời gian chuyển khi giảm/khôi phục âm lượng hệ thống (macOS)"
       }
     },
     "advanced": {

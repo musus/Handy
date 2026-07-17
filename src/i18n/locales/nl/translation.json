@@ -237,6 +237,15 @@
       "volume": {
         "title": "Volume",
         "description": "Pas het volume van de geluidsfeedback aan"
+      },
+      "duckLevel": {
+        "title": "Duck-niveau",
+        "description": "Doelvolume tijdens opname (macOS). 0% = volledig dempen (oorspronkelijk gedrag).",
+        "fullMute": "Volledig dempen"
+      },
+      "duckFade": {
+        "title": "Fade-duur",
+        "description": "Fade-tijd bij het verlagen/herstellen van het systeemvolume (macOS)"
       }
     },
     "advanced": {

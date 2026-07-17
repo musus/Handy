@@ -237,6 +237,15 @@
       "volume": {
         "title": "音量",
         "description": "调整音频反馈的音量"
+      },
+      "duckLevel": {
+        "title": "闪避级别",
+        "description": "录音时的目标音量 (macOS)。0% = 完全静音（原始行为）。",
+        "fullMute": "完全静音"
+      },
+      "duckFade": {
+        "title": "淡变时长",
+        "description": "降低/恢复系统音量时的淡变时间 (macOS)"
       }
     },
     "advanced": {

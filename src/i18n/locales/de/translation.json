@@ -237,6 +237,15 @@
       "volume": {
         "title": "Lautstärke",
         "description": "Lautstärke der Audio-Feedback-Töne anpassen"
+      },
+      "duckLevel": {
+        "title": "Duck-Pegel",
+        "description": "Ziellautstärke während der Aufnahme (macOS). 0 % = vollständige Stummschaltung (ursprüngliches Verhalten).",
+        "fullMute": "Vollständig stumm"
+      },
+      "duckFade": {
+        "title": "Übergangsdauer",
+        "description": "Ein-/Ausblendzeit beim Absenken der Systemlautstärke (macOS)"
       }
     },
     "advanced": {

@@ -237,6 +237,15 @@
       "volume": {
         "title": "Volume",
         "description": "Regola il volume del feedback audio"
+      },
+      "duckLevel": {
+        "title": "Livello di attenuazione",
+        "description": "Volume di destinazione durante la registrazione (macOS). 0% = silenziamento totale (comportamento originale).",
+        "fullMute": "Silenziamento totale"
+      },
+      "duckFade": {
+        "title": "Durata della dissolvenza",
+        "description": "Tempo di dissolvenza quando si abbassa/ripristina il volume di sistema (macOS)"
       }
     },
     "advanced": {

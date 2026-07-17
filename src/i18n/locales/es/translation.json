@@ -237,6 +237,15 @@
       "volume": {
         "title": "Volumen",
         "description": "Ajusta el volumen de los sonidos de retroalimentación de audio"
+      },
+      "duckLevel": {
+        "title": "Nivel de atenuación",
+        "description": "Volumen objetivo durante la grabación (macOS). 0% = silencio total (comportamiento original).",
+        "fullMute": "Silencio total"
+      },
+      "duckFade": {
+        "title": "Duración del fundido",
+        "description": "Tiempo de fundido al bajar/restaurar el volumen del sistema (macOS)"
       }
     },
     "advanced": {

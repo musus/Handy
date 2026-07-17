@@ -237,6 +237,15 @@
       "volume": {
         "title": "Volym",
         "description": "Justera volymen för ljudåterkopplingsljud"
+      },
+      "duckLevel": {
+        "title": "Duckningsnivå",
+        "description": "Målvolym under inspelning (macOS). 0 % = helt ljudlös (ursprungligt beteende).",
+        "fullMute": "Helt ljudlös"
+      },
+      "duckFade": {
+        "title": "Toningstid",
+        "description": "Toningstid när systemvolymen sänks/återställs (macOS)"
       }
     },
     "advanced": {

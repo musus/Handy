@@ -237,6 +237,15 @@
       "volume": {
         "title": "Hlasitost",
         "description": "Upravte hlasitost zvukové odezvy"
+      },
+      "duckLevel": {
+        "title": "Úroveň ztlumení",
+        "description": "Cílová hlasitost během nahrávání (macOS). 0 % = úplné ztlumení (původní chování).",
+        "fullMute": "Úplné ztlumení"
+      },
+      "duckFade": {
+        "title": "Doba prolínání",
+        "description": "Doba plynulého snížení/obnovení hlasitosti systému (macOS)"
       }
     },
     "advanced": {

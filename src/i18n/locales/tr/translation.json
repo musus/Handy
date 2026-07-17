@@ -237,6 +237,15 @@
       "volume": {
         "title": "Ses Seviyesi",
         "description": "Sesli geri bildirimlerin ses seviyesini ayarlayın"
+      },
+      "duckLevel": {
+        "title": "Kısma düzeyi",
+        "description": "Kayıt sırasında hedef ses düzeyi (macOS). %0 = tam sessiz (özgün davranış).",
+        "fullMute": "Tam sessiz"
+      },
+      "duckFade": {
+        "title": "Geçiş süresi",
+        "description": "Sistem sesini kısarken/geri yüklerken geçiş süresi (macOS)"
       }
     },
     "advanced": {

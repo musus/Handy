@@ -237,6 +237,15 @@
       "volume": {
         "title": "Głośność",
         "description": "Dostosuj głośność dźwięków informacyjnych"
+      },
+      "duckLevel": {
+        "title": "Poziom wyciszenia",
+        "description": "Docelowa głośność podczas nagrywania (macOS). 0% = pełne wyciszenie (pierwotne zachowanie).",
+        "fullMute": "Pełne wyciszenie"
+      },
+      "duckFade": {
+        "title": "Czas przejścia",
+        "description": "Czas płynnego ściszania/przywracania głośności systemu (macOS)"
       }
     },
     "advanced": {
