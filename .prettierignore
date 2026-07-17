@@ -15,6 +15,7 @@ src-tauri/transcribe-rs-patch
 
 # Generated files
 src/bindings.ts
+src-tauri/src/catalog/catalog.json
 
 # Misc
 .DS_Store
