@@ -36,7 +36,6 @@ use transcribe_rs::{
 const STREAM_PERF_LOG_INTERVAL: Duration = Duration::from_secs(5);
 const STREAM_FINALIZE_REPLY_TIMEOUT: Duration = Duration::from_secs(30);
 
-<<<<<<< HEAD
 /// Minimum pause between rebatch passes of the live-preview buffer.
 const REBATCH_MIN_INTERVAL: Duration = Duration::from_millis(400);
 /// Skip live passes below this duration (the model rejects < 0.1s; anything
@@ -46,7 +45,7 @@ const REBATCH_MIN_AUDIO_SECS: f32 = 0.2;
 const REBATCH_LIVE_MAX_SECS: f32 = 60.0;
 /// Hard cap for the single finalize pass (the model limit is 64s).
 const REBATCH_FINALIZE_MAX_SECS: f32 = 63.5;
-=======
+
 fn panic_payload_message(payload: &(dyn std::any::Any + Send)) -> String {
     if let Some(message) = payload.downcast_ref::<&str>() {
         (*message).to_string()
@@ -56,7 +55,6 @@ fn panic_payload_message(payload: &(dyn std::any::Any + Send)) -> String {
         "unknown panic".to_string()
     }
 }
->>>>>>> tags/v0.9.4
 
 #[derive(Clone, Debug, Serialize)]
 pub struct ModelStateEvent {
