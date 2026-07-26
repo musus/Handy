@@ -119,6 +119,24 @@ jobs:
           git merge --no-ff --no-commit "tags/${new_tag}" || true
 
           resolved=()
+
+          # .github/workflows/ -> 常に fork側(HEAD)固定
+          # GITHUB_TOKEN は workflows ファイルを書き換える push を許可しない
+          # (upstream が build.yml 等を変更しても取り込まず、PR本文で diff のみ提示する)
+          workflow_diffs=$(git diff --name-only HEAD "tags/${new_tag}" -- .github/workflows/ || true)
+          if [[ -n "${workflow_diffs}" ]]; then
+            while IFS= read -r f; do
+              [[ -z "$f" ]] && continue
+              if git cat-file -e "HEAD:${f}" 2>/dev/null; then
+                git checkout HEAD -- "$f"
+                git add "$f"
+              else
+                git rm -f --ignore-unmatch "$f" >/dev/null 2>&1 || true
+              fi
+            done <<< "${workflow_diffs}"
+            resolved+=(".github/workflows/ (ours固定, GITHUB_TOKENはworkflow書換不可)")
+          fi
+
           # Cargo.lock -> theirs (build will regen)
           if git status --porcelain | grep -q '^UU src-tauri/Cargo.lock'; then
             git checkout --theirs src-tauri/Cargo.lock
@@ -294,6 +312,17 @@ jobs:
             echo "## 機械解決済み"
             echo
             echo "${RESOLVED}"
+            echo
+            echo "## upstream workflows 差分 (未取込)"
+            echo
+            workflow_diff=$(git diff --stat "tags/${PREV_TAG}" "tags/${NEW_TAG}" -- .github/workflows/ 2>/dev/null || true)
+            if [[ -z "${workflow_diff}" ]]; then
+              echo "(差分なし)"
+            else
+              echo '```'
+              echo "${workflow_diff}"
+              echo '```'
+            fi
             echo
             echo "## 残存コンフリクト (手動解決必要)"
             echo
