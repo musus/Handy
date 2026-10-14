@@ -1127,16 +1127,29 @@ impl TranscriptionManager {
     /// text if a stable prefix were promoted.
     ///
     /// Returns `None` when no reply is owed (cancel or channel disconnect), or
-    /// `Some((reply, raw_text))` for the finalize handshake; a `None` raw_text
-    /// tells the caller to fall back to batch transcription. The caller must
-    /// return the engine before sending the reply.
+    /// `Some((reply, finalized))` for the finalize handshake; a `None` finalized
+    /// tells the caller to fall back to batch transcription. The finalized text
+    /// is raw — `finalize_stream` post-processes it. The caller must return the
+    /// engine before sending the reply.
     fn run_rebatch_stream_loop(
         &self,
         engine: &mut LoadedEngine,
         rx: &mpsc::Receiver<StreamCmd>,
         model_id: &str,
-    ) -> Option<(mpsc::Sender<Option<String>>, Option<String>)> {
+    ) -> Option<(
+        mpsc::Sender<Option<FinalizedStreamText>>,
+        Option<FinalizedStreamText>,
+    )> {
         let settings = get_settings(&self.app_handle);
+        // Moonshine is batch-only and takes no language hint, so its output
+        // language is whatever the model is constrained to (moonshine-base-ja
+        // -> "ja"). The same evidence feeds the live display and the final text.
+        let languages = self
+            .model_manager
+            .get_model_info(model_id)
+            .map(|info| info.supported_languages)
+            .unwrap_or_default();
+        let output_language = resolve_output_language_evidence(&settings, None, &languages, false);
         let mut buffer: Vec<f32> = Vec::new();
         let mut samples_at_last_infer = 0usize;
         let mut last_raw: Option<String> = None;
@@ -1156,7 +1169,7 @@ impl TranscriptionManager {
             // Drain everything queued behind the first command so each pass
             // sees the freshest buffer and feeds never back up while inference
             // is slower than real time.
-            let mut finalize: Option<mpsc::Sender<Option<String>>> = None;
+            let mut finalize: Option<mpsc::Sender<Option<FinalizedStreamText>>> = None;
             let mut cmd = Some(first);
             loop {
                 match cmd {
@@ -1202,6 +1215,11 @@ impl TranscriptionManager {
                         }
                     }
                 };
+                let result = result.map(|text| FinalizedStreamText {
+                    text,
+                    output_language: output_language.clone(),
+                    supported_languages: languages.clone(),
+                });
                 return Some((reply, result));
             }
 
@@ -1226,10 +1244,12 @@ impl TranscriptionManager {
             match rebatch_transcribe(engine, &buffer) {
                 Ok(raw) => {
                     samples_at_last_infer = buffer.len();
-                    let display = filter_transcription_output(
-                        &raw,
-                        &settings.app_language,
-                        &settings.custom_filler_words,
+                    let display = post_process_transcription_text(
+                        raw.clone(),
+                        &settings,
+                        false,
+                        &output_language,
+                        &languages,
                     );
                     last_raw = Some(raw);
                     if display != last_display {
@@ -2088,10 +2108,6 @@ fn cpp_translation_task(
     }
 }
 
-/// Drain a stream command channel, ignoring fed audio, until the caller
-/// finalizes or cancels. Used when streaming can't actually run (model not
-/// loaded / not streaming-capable) so the finalize handshake still completes
-/// and the caller falls back to batch transcription.
 /// Single full-buffer transcription pass for the rebatch pseudo-streaming loop.
 fn rebatch_transcribe(engine: &mut LoadedEngine, samples: &[f32]) -> Result<String> {
     match engine {
@@ -2103,6 +2119,10 @@ fn rebatch_transcribe(engine: &mut LoadedEngine, samples: &[f32]) -> Result<Stri
     }
 }
 
+/// Drain a stream command channel, ignoring fed audio, until the caller
+/// finalizes or cancels. Used when streaming can't actually run (model not
+/// loaded / not streaming-capable) so the finalize handshake still completes
+/// and the caller falls back to batch transcription.
 fn drain_until_finalize(rx: mpsc::Receiver<StreamCmd>) {
     while let Ok(cmd) = rx.recv() {
         match cmd {

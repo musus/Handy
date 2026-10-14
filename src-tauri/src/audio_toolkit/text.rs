@@ -491,7 +491,7 @@ pub fn normalize_transcription_output(text: &str) -> String {
     let mut normalized = collapse_stutters(text);
 
     // Remove spurious spaces between adjacent CJK characters (Moonshine ja artifact)
-    filtered = remove_cjk_interchar_spaces(&filtered);
+    normalized = remove_cjk_interchar_spaces(&normalized);
 
     // Clean up multiple spaces to single space
     normalized = MULTI_SPACE_PATTERN
