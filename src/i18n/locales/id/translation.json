@@ -256,6 +256,15 @@
       "volume": {
         "title": "Volume",
         "description": "Sesuaikan volume suara umpan balik audio"
+      },
+      "duckLevel": {
+        "title": "Tingkat Peredaman",
+        "description": "Volume target saat merekam (macOS). 0% = bisu total (perilaku asli).",
+        "fullMute": "Bisu total"
+      },
+      "duckFade": {
+        "title": "Durasi Transisi",
+        "description": "Waktu transisi masuk/keluar saat meredam audio sistem (macOS)"
       }
     },
     "advanced": {

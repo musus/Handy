@@ -256,6 +256,15 @@
       "volume": {
         "title": "Volum",
         "description": "Ajusta el volum dels avisos sonors"
+      },
+      "duckLevel": {
+        "title": "Nivell d'atenuació",
+        "description": "Volum objectiu durant la gravació (macOS). 0% = silenci total (comportament original).",
+        "fullMute": "Silenci total"
+      },
+      "duckFade": {
+        "title": "Durada de l'esvaïment",
+        "description": "Temps d'esvaïment d'entrada i sortida en atenuar l'àudio del sistema (macOS)"
       }
     },
     "advanced": {

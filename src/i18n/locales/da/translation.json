@@ -256,6 +256,15 @@
       "volume": {
         "title": "Lydstyrke",
         "description": "Juster lydstyrken for lydfeedback"
+      },
+      "duckLevel": {
+        "title": "Dæmpningsniveau",
+        "description": "Mållydstyrke under optagelse (macOS). 0 % = fuld lydløs (oprindelig adfærd).",
+        "fullMute": "Fuld lydløs"
+      },
+      "duckFade": {
+        "title": "Toningsvarighed",
+        "description": "Ind- og udtoningstid ved dæmpning af systemlyd (macOS)"
       }
     },
     "advanced": {
