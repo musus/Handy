@@ -476,18 +476,40 @@ fn strip_trailing_repeats(text: &str) -> String {
     if n < MIN_LEN * 2 {
         return text.to_string();
     }
-    for len in (MIN_LEN..=n / 2).rev() {
+    // 削除量が最大になる周期を採用する。最長一致だけを見ると真の周期の倍数で
+    // 止まり (P×4 を (PP)×2 と判定)、コピーが複数残る。最短一致だけを見ると
+    // 句の末尾にたまたまある短い内部反復を拾ってしまう。
+    let mut best_removed = 0usize;
+    for len in MIN_LEN..=n / 2 {
         let tail = &chars[n - len..];
         let mut k = 1usize;
         while n >= len * (k + 1) && &chars[n - len * (k + 1)..n - len * k] == tail {
             k += 1;
         }
-        if k >= 2 {
-            let cut = n - len * (k - 1);
-            return chars[..cut].iter().collect();
+        if k < 2 {
+            continue;
         }
+        // 暴走は max_length で句の途中に打ち切られるので、末尾に P の先頭断片が
+        // 付く (P×k + P[..m])。末尾揃えの窓は回転した P を数えるため、そのままだと
+        // 断片が残る。周期性が左へ何文字延びるか (= 断片長 m) を測り、句の頭で切る。
+        // ただし前文の末尾がたまたま P の末尾と同じ (「った」「。」等) でも同じ形に
+        // なるので、2 文字以下の延長は偶然とみなして末尾揃えで切る (本文を削らない側)。
+        let aligned_start = n - len * k;
+        let mut run_start = aligned_start;
+        while run_start > 0 && chars[run_start - 1] == chars[run_start - 1 + len] {
+            run_start -= 1;
+        }
+        let cut = if aligned_start - run_start >= 3 {
+            run_start + len
+        } else {
+            aligned_start + len
+        };
+        best_removed = best_removed.max(n - cut);
     }
-    text.to_string()
+    if best_removed == 0 {
+        return text.to_string();
+    }
+    chars[..n - best_removed].iter().collect()
 }
 
 #[cfg(test)]
@@ -527,6 +549,41 @@ mod tests {
             "前文があってそのマッピングを終わったそのマッピングを終わったそのマッピングを終わった";
         let out = strip_trailing_repeats(s);
         assert_eq!(out, "前文があってそのマッピングを終わった");
+    }
+
+    #[test]
+    fn many_trailing_repeats_collapsed_to_one() {
+        // 12 文字 × 5: 最長一致 (24 文字 × 2) ではなく 12 文字周期で 1 回分に
+        let unit = "そのマッピングを終わった";
+        let s = format!("前文{}", unit.repeat(5));
+        assert_eq!(strip_trailing_repeats(&s), format!("前文{}", unit));
+    }
+
+    #[test]
+    fn inner_tail_repeat_does_not_hide_phrase_repeat() {
+        // 句の末尾に 10 文字の内部反復 (BB) があっても、句全体の反復を優先
+        let phrase = "あいうえおかきくけこさしすせそたちつてとさしすせそたちつてと";
+        let s = format!("{}{}{}", phrase, phrase, phrase);
+        assert_eq!(strip_trailing_repeats(&s), phrase);
+    }
+
+    #[test]
+    fn truncated_trailing_fragment_removed() {
+        // max_length で句の途中に打ち切られた暴走 (P×3 + P の先頭 5 文字)
+        let unit = "そのマッピングを終わった";
+        let s = format!("前文{}そのマッピ", unit.repeat(3));
+        assert_eq!(strip_trailing_repeats(&s), format!("前文{}", unit));
+    }
+
+    #[test]
+    fn coincidental_shared_ending_not_clipped() {
+        // 前文の末尾「った」が句の末尾と同じでも、句の「った」を削らない
+        let unit = "そのマッピングを終わった";
+        let s = format!("昨日は雨だった{}", unit.repeat(3));
+        assert_eq!(
+            strip_trailing_repeats(&s),
+            format!("昨日は雨だった{}", unit)
+        );
     }
 
     #[test]
