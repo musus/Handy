@@ -1284,6 +1284,11 @@ impl AudioRecordingManager {
 
                 *self.is_recording.lock().unwrap() = false;
 
+                // Restore the user's audio now rather than when the stream
+                // closes: with an always-on mic or lazy close that can be much
+                // later, leaving the system muted or ducked after a cancel.
+                self.remove_mute();
+
                 // In on-demand mode, close the mic (lazily if the setting is enabled)
                 if matches!(*self.mode.lock().unwrap(), MicrophoneMode::OnDemand) {
                     if get_settings(&self.app_handle).lazy_stream_close {
