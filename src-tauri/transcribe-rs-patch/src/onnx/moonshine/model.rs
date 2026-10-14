@@ -428,6 +428,119 @@ impl MoonshineTokenizer {
         let text = String::from_utf8_lossy(&bytes);
         let text = text.strip_prefix(' ').unwrap_or(&text);
 
-        Ok(text.to_string())
+        // SentencePiece の `▁`→space 置換は欧文の単語境界を復元するためのもの。
+        // 日本語 (CJK) の場合、モデルが各文字の間に `▁` を出力する性質があり、
+        // そのまま decode すると「文 字 ご と に ス ペ ー ス」になる。
+        // CJK 文字に挟まれたスペースのみ除去する (英単語間は残す)。
+        Ok(strip_trailing_repeats(&strip_cjk_spaces(text)))
+    }
+}
+
+fn is_cjk(c: char) -> bool {
+    matches!(c as u32,
+        0x3000..=0x303F   // CJK 句読点
+        | 0x3040..=0x309F // ひらがな
+        | 0x30A0..=0x30FF // カタカナ
+        | 0x3400..=0x4DBF // CJK Ext A
+        | 0x4E00..=0x9FFF // CJK Unified
+        | 0xF900..=0xFAFF // CJK 互換漢字
+        | 0xFF00..=0xFFEF // 全角英数・半角カナ
+    )
+}
+
+fn strip_cjk_spaces(text: &str) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    let mut out = String::with_capacity(text.len());
+    let mut i = 0;
+    while i < chars.len() {
+        let c = chars[i];
+        if c == ' ' && i > 0 && i + 1 < chars.len() && is_cjk(chars[i - 1]) && is_cjk(chars[i + 1])
+        {
+            i += 1;
+            continue;
+        }
+        out.push(c);
+        i += 1;
+    }
+    out
+}
+
+/// 文末から「長さ len の同一パターンが k 回 (k >= 2) 連続」を検出し、
+/// 1 回分だけ残して残りを削除する。Moonshine 系の自己回帰デコードが
+/// EOS に到達せず同一句を吐き続ける現象への対策。
+/// 副作用最小化: len >= 8 のみ対象 (短い反復「ありがとうありがとう」は触らない)。
+fn strip_trailing_repeats(text: &str) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    let n = chars.len();
+    const MIN_LEN: usize = 8;
+    if n < MIN_LEN * 2 {
+        return text.to_string();
+    }
+    for len in (MIN_LEN..=n / 2).rev() {
+        let tail = &chars[n - len..];
+        let mut k = 1usize;
+        while n >= len * (k + 1) && &chars[n - len * (k + 1)..n - len * k] == tail {
+            k += 1;
+        }
+        if k >= 2 {
+            let cut = n - len * (k - 1);
+            return chars[..cut].iter().collect();
+        }
+    }
+    text.to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{strip_cjk_spaces, strip_trailing_repeats};
+
+    #[test]
+    fn cjk_spaces_collapsed() {
+        assert_eq!(strip_cjk_spaces("文 字 ご と"), "文字ごと");
+    }
+
+    #[test]
+    fn ascii_spaces_kept() {
+        assert_eq!(strip_cjk_spaces("hello world"), "hello world");
+    }
+
+    #[test]
+    fn mixed_spaces() {
+        // CJK-CJK のみ削除、CJK-ASCII / ASCII-CJK 境界は保持
+        // "の コ" は CJK-CJK → space 削除、"は R" や "t の" はそのまま
+        assert_eq!(
+            strip_cjk_spaces("これは React の コード"),
+            "これは React のコード"
+        );
+    }
+
+    #[test]
+    fn no_repeat_unchanged() {
+        let s = "これは普通の日本語の文章です";
+        assert_eq!(strip_trailing_repeats(s), s);
+    }
+
+    #[test]
+    fn trailing_long_repeat_collapsed() {
+        // 末尾 12 文字 × 3 → 1 回
+        let s =
+            "前文があってそのマッピングを終わったそのマッピングを終わったそのマッピングを終わった";
+        let out = strip_trailing_repeats(s);
+        assert_eq!(out, "前文があってそのマッピングを終わった");
+    }
+
+    #[test]
+    fn short_repeat_kept() {
+        // 7 文字パターン (MIN_LEN=8 未満) は触らない
+        let s = "ありがとうありがとう"; // 5+5
+        assert_eq!(strip_trailing_repeats(s), s);
+    }
+
+    #[test]
+    fn mixed_ascii_cjk_repeat() {
+        // 10 文字 × 2 → 1 回
+        let s = "これはReactテストこれはReactテスト";
+        let out = strip_trailing_repeats(s);
+        assert_eq!(out, "これはReactテスト");
     }
 }
