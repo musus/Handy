@@ -428,6 +428,176 @@ impl MoonshineTokenizer {
         let text = String::from_utf8_lossy(&bytes);
         let text = text.strip_prefix(' ').unwrap_or(&text);
 
-        Ok(text.to_string())
+        // SentencePiece の `▁`→space 置換は欧文の単語境界を復元するためのもの。
+        // 日本語 (CJK) の場合、モデルが各文字の間に `▁` を出力する性質があり、
+        // そのまま decode すると「文 字 ご と に ス ペ ー ス」になる。
+        // CJK 文字に挟まれたスペースのみ除去する (英単語間は残す)。
+        Ok(strip_trailing_repeats(&strip_cjk_spaces(text)))
+    }
+}
+
+fn is_cjk(c: char) -> bool {
+    matches!(c as u32,
+        0x3000..=0x303F   // CJK 句読点
+        | 0x3040..=0x309F // ひらがな
+        | 0x30A0..=0x30FF // カタカナ
+        | 0x3400..=0x4DBF // CJK Ext A
+        | 0x4E00..=0x9FFF // CJK Unified
+        | 0xF900..=0xFAFF // CJK 互換漢字
+        | 0xFF00..=0xFFEF // 全角英数・半角カナ
+    )
+}
+
+fn strip_cjk_spaces(text: &str) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    let mut out = String::with_capacity(text.len());
+    let mut i = 0;
+    while i < chars.len() {
+        let c = chars[i];
+        if c == ' ' && i > 0 && i + 1 < chars.len() && is_cjk(chars[i - 1]) && is_cjk(chars[i + 1])
+        {
+            i += 1;
+            continue;
+        }
+        out.push(c);
+        i += 1;
+    }
+    out
+}
+
+/// 文末から「長さ len の同一パターンが k 回 (k >= 2) 連続」を検出し、
+/// 1 回分だけ残して残りを削除する。Moonshine 系の自己回帰デコードが
+/// EOS に到達せず同一句を吐き続ける現象への対策。
+/// 副作用最小化: len >= 8 のみ対象 (短い反復「ありがとうありがとう」は触らない)。
+fn strip_trailing_repeats(text: &str) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    let n = chars.len();
+    const MIN_LEN: usize = 8;
+    if n < MIN_LEN * 2 {
+        return text.to_string();
+    }
+    // 削除量が最大になる周期を採用する。最長一致だけを見ると真の周期の倍数で
+    // 止まり (P×4 を (PP)×2 と判定)、コピーが複数残る。最短一致だけを見ると
+    // 句の末尾にたまたまある短い内部反復を拾ってしまう。
+    let mut best_removed = 0usize;
+    for len in MIN_LEN..=n / 2 {
+        let tail = &chars[n - len..];
+        let mut k = 1usize;
+        while n >= len * (k + 1) && &chars[n - len * (k + 1)..n - len * k] == tail {
+            k += 1;
+        }
+        if k < 2 {
+            continue;
+        }
+        // 暴走は max_length で句の途中に打ち切られるので、末尾に P の先頭断片が
+        // 付く (P×k + P[..m])。末尾揃えの窓は回転した P を数えるため、そのままだと
+        // 断片が残る。周期性が左へ何文字延びるか (= 断片長 m) を測り、句の頭で切る。
+        // ただし前文の末尾がたまたま P の末尾と同じ (「った」「。」等) でも同じ形に
+        // なるので、2 文字以下の延長は偶然とみなして末尾揃えで切る (本文を削らない側)。
+        let aligned_start = n - len * k;
+        let mut run_start = aligned_start;
+        while run_start > 0 && chars[run_start - 1] == chars[run_start - 1 + len] {
+            run_start -= 1;
+        }
+        let cut = if aligned_start - run_start >= 3 {
+            run_start + len
+        } else {
+            aligned_start + len
+        };
+        best_removed = best_removed.max(n - cut);
+    }
+    if best_removed == 0 {
+        return text.to_string();
+    }
+    chars[..n - best_removed].iter().collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{strip_cjk_spaces, strip_trailing_repeats};
+
+    #[test]
+    fn cjk_spaces_collapsed() {
+        assert_eq!(strip_cjk_spaces("文 字 ご と"), "文字ごと");
+    }
+
+    #[test]
+    fn ascii_spaces_kept() {
+        assert_eq!(strip_cjk_spaces("hello world"), "hello world");
+    }
+
+    #[test]
+    fn mixed_spaces() {
+        // CJK-CJK のみ削除、CJK-ASCII / ASCII-CJK 境界は保持
+        // "の コ" は CJK-CJK → space 削除、"は R" や "t の" はそのまま
+        assert_eq!(
+            strip_cjk_spaces("これは React の コード"),
+            "これは React のコード"
+        );
+    }
+
+    #[test]
+    fn no_repeat_unchanged() {
+        let s = "これは普通の日本語の文章です";
+        assert_eq!(strip_trailing_repeats(s), s);
+    }
+
+    #[test]
+    fn trailing_long_repeat_collapsed() {
+        // 末尾 12 文字 × 3 → 1 回
+        let s =
+            "前文があってそのマッピングを終わったそのマッピングを終わったそのマッピングを終わった";
+        let out = strip_trailing_repeats(s);
+        assert_eq!(out, "前文があってそのマッピングを終わった");
+    }
+
+    #[test]
+    fn many_trailing_repeats_collapsed_to_one() {
+        // 12 文字 × 5: 最長一致 (24 文字 × 2) ではなく 12 文字周期で 1 回分に
+        let unit = "そのマッピングを終わった";
+        let s = format!("前文{}", unit.repeat(5));
+        assert_eq!(strip_trailing_repeats(&s), format!("前文{}", unit));
+    }
+
+    #[test]
+    fn inner_tail_repeat_does_not_hide_phrase_repeat() {
+        // 句の末尾に 10 文字の内部反復 (BB) があっても、句全体の反復を優先
+        let phrase = "あいうえおかきくけこさしすせそたちつてとさしすせそたちつてと";
+        let s = format!("{}{}{}", phrase, phrase, phrase);
+        assert_eq!(strip_trailing_repeats(&s), phrase);
+    }
+
+    #[test]
+    fn truncated_trailing_fragment_removed() {
+        // max_length で句の途中に打ち切られた暴走 (P×3 + P の先頭 5 文字)
+        let unit = "そのマッピングを終わった";
+        let s = format!("前文{}そのマッピ", unit.repeat(3));
+        assert_eq!(strip_trailing_repeats(&s), format!("前文{}", unit));
+    }
+
+    #[test]
+    fn coincidental_shared_ending_not_clipped() {
+        // 前文の末尾「った」が句の末尾と同じでも、句の「った」を削らない
+        let unit = "そのマッピングを終わった";
+        let s = format!("昨日は雨だった{}", unit.repeat(3));
+        assert_eq!(
+            strip_trailing_repeats(&s),
+            format!("昨日は雨だった{}", unit)
+        );
+    }
+
+    #[test]
+    fn short_repeat_kept() {
+        // 7 文字パターン (MIN_LEN=8 未満) は触らない
+        let s = "ありがとうありがとう"; // 5+5
+        assert_eq!(strip_trailing_repeats(s), s);
+    }
+
+    #[test]
+    fn mixed_ascii_cjk_repeat() {
+        // 10 文字 × 2 → 1 回
+        let s = "これはReactテストこれはReactテスト";
+        let out = strip_trailing_repeats(s);
+        assert_eq!(out, "これはReactテスト");
     }
 }

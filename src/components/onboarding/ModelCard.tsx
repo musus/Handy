@@ -40,10 +40,17 @@ const getLanguageDisplayText = (
   });
 };
 
+// Url-sourced models distributed from this fork's releases. They are the
+// current download for their engine (e.g. the ONNX Moonshine Japanese model the
+// rebatch live preview runs on), not superseded legacy blobs.
+const FORK_URL_MODEL_IDS: ReadonlySet<string> = new Set(["moonshine-base-ja"]);
+
 // Legacy = a blob (Url-sourced) .bin/ONNX model, kept runnable but no longer the
 // advertised download (catalog GGUFs supersede it).
 export const isLegacySource = (model: ModelInfo): boolean =>
-  typeof model.source === "object" && "Url" in model.source;
+  typeof model.source === "object" &&
+  "Url" in model.source &&
+  !FORK_URL_MODEL_IDS.has(model.id);
 
 // Extract a GGUF quantization label from a filename, if present (e.g. "Q8_0").
 const getQuantLabel = (filename: string): string | null => {
