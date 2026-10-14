@@ -17,13 +17,8 @@ import { ModelSettingsCard } from "./ModelSettingsCard";
 
 export const GeneralSettings: React.FC = () => {
   const { t } = useTranslation();
-<<<<<<< HEAD
   const { audioFeedbackEnabled, getSetting } = useSettings();
-  const pushToTalk = getSetting("push_to_talk");
   const muteEnabled = getSetting("mute_while_recording") ?? false;
-=======
-  const { audioFeedbackEnabled } = useSettings();
->>>>>>> tags/v0.9.8
   const isLinux = type() === "linux";
   const isMacOS = type() === "macos";
   return (

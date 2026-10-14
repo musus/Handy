@@ -471,47 +471,6 @@ impl ShortcutAction for TranscribeAction {
         debug!("Microphone mode - always_on: {}", is_always_on);
 
         let mut recording_error: Option<String> = None;
-<<<<<<< HEAD
-        if is_always_on {
-            // Always-on mode: Play audio feedback immediately, then apply mute after sound finishes
-            debug!("Always-on mode: Playing audio feedback immediately");
-            let rm_clone = Arc::clone(&rm);
-            let app_clone = app.clone();
-            // Apply mute/ducking immediately so the system volume starts dropping
-            // the moment the key is pressed; the feedback sound plays concurrently.
-            rm_clone.apply_mute();
-            std::thread::spawn(move || {
-                play_feedback_sound_blocking(&app_clone, SoundType::Start);
-            });
-
-            if let Err(e) = rm.try_start_recording(&binding_id, vad_policy) {
-                debug!("Recording failed: {}", e);
-                recording_error = Some(e);
-            }
-        } else {
-            // On-demand mode: Start recording first, then play audio feedback, then apply mute
-            // This allows the microphone to be activated before playing the sound
-            debug!("On-demand mode: Starting recording first, then audio feedback");
-            let recording_start_time = Instant::now();
-            match rm.try_start_recording(&binding_id, vad_policy) {
-                Ok(()) => {
-                    debug!("Recording started in {:?}", recording_start_time.elapsed());
-                    // Apply mute/ducking immediately so the system volume starts dropping
-                    // the moment the key is pressed (no 100ms wait for mic activation).
-                    rm.apply_mute();
-                    // Small delay to ensure microphone stream is active before feedback sound.
-                    let app_clone = app.clone();
-                    std::thread::spawn(move || {
-                        std::thread::sleep(std::time::Duration::from_millis(100));
-                        debug!("Handling delayed audio feedback");
-                        play_feedback_sound_blocking(&app_clone, SoundType::Start);
-                    });
-                }
-                Err(e) => {
-                    debug!("Failed to start recording: {}", e);
-                    recording_error = Some(e);
-                }
-=======
         let recording_start_time = Instant::now();
         match rm.try_start_recording(&binding_id, vad_policy) {
             Ok(readiness) => {
@@ -519,6 +478,15 @@ impl ShortcutAction for TranscribeAction {
                     "Recording request accepted in {:?}; waiting for first microphone samples",
                     recording_start_time.elapsed()
                 );
+                // Ducking (macOS, duck_volume_percent > 0) starts the volume fade
+                // the moment the key is pressed rather than at microphone
+                // readiness; the start chime stays audible at the ducked level.
+                // A real mute still follows the readiness cue below so the chime
+                // isn't silenced.
+                let duck_now = cfg!(target_os = "macos") && settings.duck_volume_percent > 0;
+                if duck_now {
+                    rm.apply_mute();
+                }
                 let generation = readiness.generation();
                 let app_clone = app.clone();
                 let rm_clone = Arc::clone(&rm);
@@ -558,7 +526,7 @@ impl ShortcutAction for TranscribeAction {
                     if rm_clone.is_recording_readiness_current(generation) {
                         play_feedback_sound_blocking(&app_clone, SoundType::Start);
                     }
-                    if rm_clone.is_recording_readiness_current(generation) {
+                    if !duck_now && rm_clone.is_recording_readiness_current(generation) {
                         rm_clone.apply_mute();
                     }
                 });
@@ -566,7 +534,6 @@ impl ShortcutAction for TranscribeAction {
             Err(e) => {
                 debug!("Failed to start recording: {}", e);
                 recording_error = Some(e);
->>>>>>> tags/v0.9.8
             }
         }
 
