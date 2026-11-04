@@ -2,7 +2,9 @@ Read @AGENTS.md
 
 ## このフォークについて (musus/Handy)
 
-本リポジトリは [cjpais/Handy](https://github.com/cjpais/Handy) のフォークで、**Moonshine Base Japanese** モデルサポートを追加している。
+本リポジトリは [cjpais/Handy](https://github.com/cjpais/Handy) のフォークで、日本語での利用（Moonshine Base Japanese）向けの調整と macOS の音量 ducking を加えている。
+
+v0.10.0 からは upstream がすべてのモデルを transcribe-cpp（GGUF）で動かすようになり、`moonshine-base-ja` も公式カタログ（`handy-computer/moonshine-base-ja-gguf`）に入った。そのため、以前フォークで持っていた `.ort` 版モデル・`transcribe-rs-patch`・rebatch ライブプレビューは廃止し、upstream の仕組みの上に必要な差分だけを載せている。
 
 ### リモート構成
 
@@ -11,33 +13,31 @@ Read @AGENTS.md
 
 ### フォーク独自の変更点
 
-1. **`moonshine-base-ja` モデルの追加**
-   - `src-tauri/src/managers/model.rs`: モデルエントリ追加（134MB、日本語専用）
-   - ダウンロードURL: `https://github.com/musus/Handy/releases/download/v0.8.0-moonshine-ja/moonshine-base-ja.tar.gz`
-   - モデルファイルは `.ort` 形式（`encoder_model.ort`, `decoder_model_merged.ort`, `tokenizer.json`）
-2. **`src-tauri/src/managers/transcription.rs`**
-   - `moonshine-base-ja` → `MoonshineVariant::BaseJa` にマッピング
-3. **`src-tauri/transcribe-rs-patch/`** — `[patch.crates-io]` 経由で `transcribe-rs` を置換するローカルパッチ
-   - `src/onnx/session.rs::resolve_model_path` に `.ort` フォールバックを追加
-   - `src/onnx/moonshine/mod.rs` に `MoonshineVariant::BaseJa` を追加（`token_rate=13` CJK対応、`num_layers=8`, `head_dim=52`）
+1. **長尺分割の切り位置を 30 秒寄りにする** — `src-tauri/src/audio_toolkit/chunking.rs` の `EARLY_CUT_PENALTY`（upstream は 0.05、フォークは 0.15）。upstream の重みだと 22 秒付近の長いポーズで切られやすく、moonshine-base-ja は約 22 秒のチャンクで冒頭の文を落とす（30 秒なら落とさない）。127 秒の日本語録音で確認済み
+2. **非ストリーミングモデルのライブ表示（末尾プレビュー）** — 録音中、まだチャンクになっていない末尾の音声を約 0.4 秒おきにデコードし直し、確定済みチャンクの後ろに仮テキストとして表示する。旧 rebatch ライブプレビューの置き換え
+   - `managers/transcription/chunked.rs` の `TailPreview` / `ChunkedDecode::preview` / `with_preview`（`PREVIEW_*` 定数）
+   - `managers/transcription/live.rs` の `LiveDecode::Chunked` 分岐（`chunk_preview` が立っていれば `with_preview()` と `stream_active`）
+   - `managers/transcription.rs` の `chunk_preview` フィールド・`can_preview_chunks()`・`set_chunk_preview()`
+   - `actions.rs` の録音開始処理（overlay が Live かつロード済みモデルが分割対象のとき、Live パネルを開いてプレビューを有効化）
+   - `audio_toolkit/chunking.rs` の `Chunker::pending()`
+3. **macOS システム音量 ducking** — `managers/audio.rs`（`macos_coreaudio`、`MuteState.ducked`、`saved_volume`、`restore_audio()`、`cancel_recording` での `remove_mute()`）、`actions.rs`（`duck_now`）、`settings.rs` の `duck_volume_percent` / `duck_fade_ms`、`shortcut/mod.rs` の `change_duck_*`、`lib.rs` のコマンド登録、`DuckLevelSlider` / `DuckFadeSlider`、`GeneralSettings.tsx`、`settingsStore.ts`、`bindings.ts`、全ロケールの `settings.sound.duckLevel` / `duckFade`、`Cargo.toml` の `coreaudio-sys`
+4. **CJK 文字間スペース除去** — `audio_toolkit/text.rs` の `remove_cjk_interchar_spaces`（`normalize_transcription_output` 内）
+5. **旧 `.ort` 版 moonshine-base-ja の移行** — `managers/model.rs` の `RETIRED_ONNX_MODELS` に `moonshine-base-ja` を追加。`models/moonshine-base-ja/` が残っていれば、upstream の移行画面が GGUF 版への置き換えと旧ファイル削除を案内する
+6. **updater / CI** — `tauri.conf.json` の updater endpoint・pubkey・`signingIdentity`（`HandyDevCert`）・`createUpdaterArtifacts`、`.github/workflows` は fork 版に固定（`upstream-sync.yml`）、`.github/upstream-version`
 
 ### upstream マージ手順
 
 ```bash
 git fetch upstream
 git merge upstream/main
-# Cargo.lock でコンフリクトが出たら upstream 版で解決
+# Cargo.lock でコンフリクトが出たら upstream 版で解決し、ビルド後に再生成されたものをコミットする
 git checkout upstream/main -- src-tauri/Cargo.lock
 ```
 
-**重要な落とし穴**: upstream が `transcribe-rs` のバージョンを上げると、`transcribe-rs-patch` のバージョンが要件を満たさず「`patch was not used in the crate graph`」警告が出て、パッチが黙って無視される。この場合：
-
-1. `transcribe-rs-patch/Cargo.toml` と `Cargo.toml.orig` の `version` を upstream `src-tauri/Cargo.toml` で要求されるバージョンに合わせる
-2. 新しい upstream `transcribe-rs` の src を cargo キャッシュから取得：
-   `~/.cargo/registry/src/index.crates.io-*/transcribe-rs-<VER>/src/` を `transcribe-rs-patch/src/` に上書きコピー
-3. フォーク独自の変更（上記`.ort` フォールバックと `BaseJa` バリアント）を再適用
-4. `transcribe-rs-patch/Cargo.toml` の `whisper-cpp` feature に `whisper-rs/raw-api` が含まれているか確認（upstream の `gpu.rs` が `whisper_rs::whisper_rs_sys` を使うため必須）
-5. `cargo update transcribe-rs` してから再ビルド
+- マージ後は必ずビルドを通す。git が自動マージしたフォークのコードが、upstream の関数分割・型変更に追従せずコンパイルエラーになることがある（v0.9.8 で発生）
+- `Cargo.toml` を upstream 版（theirs）で解決すると `coreaudio-sys` が落ちる。手で戻す
+- upstream が新しいロケールを追加したら、duck 系の翻訳キーも足す（`bun run check:translations`）
+- upstream の構造が大きく変わったリリース（v0.10.0 など）は、マージより「新しいタグからブランチを切ってフォークの変更を載せ直し、旧フォークのブランチを `git merge -s ours` で履歴だけ取り込む」方が早い
 
 ### ビルド環境 (macOS)
 
@@ -45,16 +45,20 @@ git checkout upstream/main -- src-tauri/Cargo.lock
 
 - **Rust/cargo**: `~/.cargo/bin/cargo`（インストール: `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`）
 - **Bun**: `~/.bun/bin/bun`（インストール: `curl -fsSL https://bun.sh/install | bash`）
-- **CMake**: `brew install cmake`（`whisper-rs-sys` のビルドに必要）
+- **CMake**: `brew install cmake`（transcribe-cpp のビルドに必要）
 - **Xcode**: フル版が必要（Command Line Tools だけだと `TargetConditionals.h` が見つからず `ring` ビルドが失敗）
 
 ビルド実行時は環境変数が必要：
 
 ```bash
 export PATH="$HOME/.cargo/bin:$HOME/.bun/bin:/opt/homebrew/bin:$PATH"
+export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
 export SDKROOT=$(xcrun --sdk macosx --show-sdk-path)
 bun run tauri build
 ```
+
+- `xcode-select` が CommandLineTools を指していてもビルドは通るが、Apple Intelligence（後処理プロバイダ）が stub になる。`DEVELOPER_DIR` でフル Xcode を指定し、ログに `Building with Apple Intelligence support.` が出ることを確認する
+- Xcode 更新後はライセンス未同意で `xcrun` が止まる。`sudo /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild -license accept`（`xcode-select` を変えずに同意できる）
 
 アプリ本体の生成後に出る「`A public key has been found, but no private key. Make sure to set TAURI_SIGNING_PRIVATE_KEY`」エラーはアップデーター署名の警告で、`.app`/`.dmg` 自体は正常に生成されている。
 
@@ -65,5 +69,18 @@ bun run tauri build
 - `src-tauri/target/release/bundle/macos/Handy.app`
 - `src-tauri/target/release/bundle/dmg/Handy_<version>_aarch64.dmg`
 
-モデル配置先（既にダウンロード済みの場合）：
-`~/Library/Application Support/com.pais.handy/models/moonshine-base-ja/`
+録音ファイルをアプリを開かずに文字起こしして比べられる（`--transcribe-file`）。普段の設定や履歴を汚さないよう、ポータブルモードで動かす：
+
+```bash
+# .app と同じ構成にしないと VAD モデル（resources）のパスが解決できず、長尺分割が効かない
+mkdir -p /tmp/h/H.app/Contents/{MacOS,Resources}
+cp src-tauri/target/release/handy /tmp/h/H.app/Contents/MacOS/
+cp -R src-tauri/resources /tmp/h/H.app/Contents/Resources/
+printf "Handy Portable Mode" > /tmp/h/H.app/Contents/MacOS/portable
+# HF_HOME を明示すると、ポータブルモードでも ~/.cache/huggingface のモデルを使う
+cd /tmp/h/H.app/Contents/MacOS && HF_HOME=$HOME/.cache/huggingface ./handy \
+  --transcribe-file <録音.wav> \
+  --model handy-computer/moonshine-base-ja-gguf/moonshine-base-ja-Q8_0.gguf
+```
+
+録音ファイルの場所: `~/Library/Application Support/com.pais.handy/recordings/`

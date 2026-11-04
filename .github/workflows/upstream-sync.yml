@@ -156,18 +156,8 @@ jobs:
             resolved+=("AGENTS.md (theirs)")
           fi
 
-          # Cargo.toml: take theirs (upstream version), then re-ensure patch entry below
-          if git status --porcelain | grep -q '^UU src-tauri/Cargo.toml'; then
-            git checkout --theirs src-tauri/Cargo.toml
-            git add src-tauri/Cargo.toml
-            resolved+=("src-tauri/Cargo.toml (theirs + patch re-applied)")
-          fi
-
-          # ensure patch entry & sync version (run regardless - idempotent)
-          chmod +x scripts/ensure-cargo-patch.sh scripts/sync-transcribe-patch-version.sh
-          ./scripts/ensure-cargo-patch.sh
-          ./scripts/sync-transcribe-patch-version.sh
-          git add src-tauri/Cargo.toml src-tauri/transcribe-rs-patch/Cargo.toml || true
+          # Cargo.toml is left to manual resolution: the fork adds
+          # coreaudio-sys (macOS ducking), which "theirs" would drop.
 
           # update upstream-version file
           echo "${new_tag}" > "$VERSION_FILE"
@@ -335,11 +325,11 @@ jobs:
             echo
             echo "## 手動対応チェックリスト"
             echo
-            echo "- [ ] \`src-tauri/src/managers/model.rs\` のセマンティックコンフリクト解決"
-            echo "- [ ] \`src-tauri/src/managers/transcription.rs\` のセマンティックコンフリクト解決 (CJK token rate / MoonshineParams 維持)"
-            echo "- [ ] transcribe-rs パッチに API追加が必要か確認 (\`~/.cargo/registry/src/index.crates-io-*/transcribe-rs-X.Y.Z/\` と \`src-tauri/transcribe-rs-patch/\` の diff)"
+            echo "- [ ] CLAUDE.md の「フォーク独自の変更点」が全部残っているか確認 (自動マージでも API 変更で壊れることがある)"
+            echo "- [ ] \`src-tauri/Cargo.toml\` に \`coreaudio-sys\` (macOS) が残っているか確認"
+            echo "- [ ] 新しいロケールがあれば duck 系の翻訳キーを追加 (\`bun run check:translations\`)"
             echo "- [ ] ローカルで \`bun run tauri dev\` 起動確認"
-            echo "- [ ] 日本語Moonshineモデルで長文転写確認"
+            echo "- [ ] 日本語Moonshineモデルで1分超の録音を確認 (ライブ表示・全文が出るか)"
           } > pr-body.md
 
       - name: Create PR
