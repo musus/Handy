@@ -21,6 +21,12 @@ use super::vad::SpeechScorer;
 const RATE: usize = constants::WHISPER_SAMPLE_RATE as usize;
 
 const TARGET_SECONDS: f64 = 30.0;
+/// Score lost per second a cut falls short of the target (fork; upstream uses
+/// 0.05). Upstream's weight lets a one-second pause at 22 s beat a short one
+/// near 30 s, and moonshine-base-ja drops the first sentence of a ~22 s chunk
+/// where it keeps it at 30 s (seen on a 127 s Japanese recording). At 0.15 a
+/// cut more than ~7 s early can't win on pause length alone.
+const EARLY_CUT_PENALTY: f64 = 0.15;
 /// Audio up to this many samples is decoded in one piece; longer audio is cut.
 const MAX_CHUNK_SAMPLES: usize = 40 * RATE;
 const MIN_CHUNK_SAMPLES: usize = 5 * RATE;
@@ -142,7 +148,7 @@ fn plan_cuts(candidates: &[CutCandidate], samples: usize, from: usize) -> Vec<us
             let off_target = if position > TARGET_SECONDS {
                 0.1 * (position - TARGET_SECONDS)
             } else {
-                0.05 * (TARGET_SECONDS - position)
+                EARLY_CUT_PENALTY * (TARGET_SECONDS - position)
             };
             let score = candidate.gap_seconds.min(1.0) - off_target;
             if samples - candidate.cut >= MIN_CHUNK_SAMPLES
@@ -215,6 +221,11 @@ impl Chunker {
     /// the whole recording before trusting the chunks.
     pub fn samples(&self) -> usize {
         self.len
+    }
+
+    /// The audio not yet in a chunk (fork: decoded for the live preview).
+    pub fn pending(&self) -> &[f32] {
+        &self.pending
     }
 
     /// Adds audio. Returns the chunks whose cuts this made certain, in order.

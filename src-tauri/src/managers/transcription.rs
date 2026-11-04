@@ -23,7 +23,7 @@ use anyhow::Result;
 use chunked::{ChunkSetup, ChunkedDecode};
 use live::LiveSession;
 use log::{debug, error, info, warn};
-use policy::{batch_decode, live_decode, BatchDecode, ModelTraits};
+use policy::{batch_decode, live_decode, BatchDecode, LiveDecode, ModelTraits};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -278,6 +278,9 @@ pub struct TranscriptionManager {
     /// Handy's spoken-language detector, loaded in this process on first
     /// use and unloaded with the model.
     language_detector: Arc<LanguageDetector>,
+    /// Fork: the next live decode shows a tail preview (see
+    /// [`Self::set_chunk_preview`]).
+    chunk_preview: Arc<AtomicBool>,
 }
 
 impl TranscriptionManager {
@@ -299,6 +302,7 @@ impl TranscriptionManager {
             active_stream_worker: Arc::new(AtomicU64::new(0)),
             job_active: Arc::new(AtomicBool::new(false)),
             language_detector: Arc::new(LanguageDetector::default()),
+            chunk_preview: Arc::new(AtomicBool::new(false)),
         };
 
         // Start the idle watcher
@@ -784,6 +788,29 @@ impl TranscriptionManager {
     /// Whether a live streaming run is currently in flight.
     pub fn is_streaming(&self) -> bool {
         self.stream_active.load(Ordering::Acquire)
+    }
+
+    /// Fork: whether `model_id` is loaded and decodes long audio in chunks
+    /// while recording, so the tail preview can give it live text. Before
+    /// the model loads, whether it keeps its accuracy on long audio is
+    /// unknown, so a model that isn't loaded yet gets no preview.
+    pub fn can_preview_chunks(&self, model_id: &str) -> bool {
+        if self.get_current_model().as_deref() != Some(model_id) {
+            return false;
+        }
+        self.engine.loaded().is_some_and(|info| {
+            live_decode(
+                ModelTraits::of(&info),
+                get_settings(&self.app_handle).long_form_chunking,
+            ) == LiveDecode::Chunked
+        })
+    }
+
+    /// Fork: whether the next recording's chunked live decode shows a tail
+    /// preview. Set when the recording starts, together with the overlay it
+    /// opens, so the two always agree.
+    pub fn set_chunk_preview(&self, enabled: bool) {
+        self.chunk_preview.store(enabled, Ordering::Release);
     }
 
     /// Shared handle to the stream router, used by the audio recorder to feed

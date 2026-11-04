@@ -546,6 +546,12 @@ impl ShortcutAction for TranscribeAction {
             streaming: model_supports_streaming,
             long_form: false,
         };
+        // Fork: a loaded model that can't stream but is chunked while recording
+        // still gets live text, from the tail preview.
+        let chunk_preview = settings.overlay_style == OverlayStyle::Live
+            && !model_supports_streaming
+            && tm.can_preview_chunks(&settings.selected_model);
+        tm.set_chunk_preview(chunk_preview);
         if live_decode(expected_model, settings.long_form_chunking) != LiveDecode::None {
             tm.start_stream();
         }
@@ -556,7 +562,9 @@ impl ShortcutAction for TranscribeAction {
         // pill instead of an oversized transparent live window.
         let overlay_started = Instant::now();
         match settings.overlay_style {
-            OverlayStyle::Live if model_supports_streaming => utils::show_streaming_overlay(app),
+            OverlayStyle::Live if model_supports_streaming || chunk_preview => {
+                utils::show_streaming_overlay(app)
+            }
             OverlayStyle::Live | OverlayStyle::Minimal => show_recording_overlay(app),
             OverlayStyle::None => {} // show_overlay_state no-ops on None anyway
         }
@@ -579,6 +587,15 @@ impl ShortcutAction for TranscribeAction {
                     "Recording request accepted in {:?}; waiting for first microphone samples",
                     recording_start_time.elapsed()
                 );
+                // Fork: ducking (macOS, duck_volume_percent > 0) starts the volume
+                // fade the moment the key is pressed rather than at microphone
+                // readiness; the start chime stays audible at the ducked level.
+                // A real mute still follows the readiness cue below so the chime
+                // isn't silenced.
+                let duck_now = cfg!(target_os = "macos") && settings.duck_volume_percent > 0;
+                if duck_now {
+                    rm.apply_mute();
+                }
                 let generation = readiness.generation();
                 let app_clone = app.clone();
                 let rm_clone = Arc::clone(&rm);
@@ -618,7 +635,7 @@ impl ShortcutAction for TranscribeAction {
                     if rm_clone.is_recording_readiness_current(generation) {
                         play_feedback_sound_blocking(&app_clone, SoundType::Start);
                     }
-                    if rm_clone.is_recording_readiness_current(generation) {
+                    if !duck_now && rm_clone.is_recording_readiness_current(generation) {
                         rm_clone.apply_mute();
                     }
                 });

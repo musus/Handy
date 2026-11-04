@@ -548,6 +548,13 @@ pub struct AppSettings {
     pub transcribe_gpu_device: Option<String>,
     #[serde(default)]
     pub extra_recording_buffer_ms: u64,
+    /// Fork (macOS): while recording with `mute_while_recording`, lower the
+    /// system volume to this percent of its level instead of muting. 0 mutes.
+    #[serde(default = "default_duck_volume_percent")]
+    pub duck_volume_percent: u8,
+    /// Fork (macOS): fade time of the duck and of its restore.
+    #[serde(default = "default_duck_fade_ms")]
+    pub duck_fade_ms: u16,
     #[serde(default = "default_vad_enabled")]
     pub vad_enabled: bool,
     /// Experimental detector implementation. Silero remains the stable default.
@@ -630,6 +637,14 @@ fn default_overlay_style() -> OverlayStyle {
     return OverlayStyle::None;
     #[cfg(not(target_os = "linux"))]
     return OverlayStyle::Live;
+}
+
+fn default_duck_volume_percent() -> u8 {
+    15
+}
+
+fn default_duck_fade_ms() -> u16 {
+    120
 }
 
 fn default_vad_enabled() -> bool {
@@ -1061,6 +1076,8 @@ pub fn get_default_settings() -> AppSettings {
         transcribe_accelerator: TranscribeAcceleratorSetting::default(),
         transcribe_gpu_device: default_transcribe_gpu_device(),
         extra_recording_buffer_ms: 0,
+        duck_volume_percent: default_duck_volume_percent(),
+        duck_fade_ms: default_duck_fade_ms(),
         vad_enabled: default_vad_enabled(),
         vad_backend: VadBackend::default(),
         long_form_chunking: default_long_form_chunking(),

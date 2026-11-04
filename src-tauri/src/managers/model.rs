@@ -853,6 +853,15 @@ const RETIRED_ONNX_MODELS: &[RetiredOnnxModel] = &[
         size_mb: 1708,
         replacement_repo: "handy-computer/cohere-transcribe-03-2026-gguf",
     },
+    // Fork: the `.ort` moonshine-base-ja this fork distributed before
+    // upstream shipped a GGUF build of it.
+    RetiredOnnxModel {
+        id: "moonshine-base-ja",
+        name: "Moonshine Base Japanese",
+        disk_names: &["moonshine-base-ja"],
+        size_mb: 134,
+        replacement_repo: "handy-computer/moonshine-base-ja-gguf",
+    },
 ];
 
 /// A retired ONNX model found on disk.

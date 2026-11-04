@@ -61,7 +61,7 @@ impl<'a> LiveSession<'a> {
             LiveDecode::Chunked => {
                 info!("Live long-form chunking started (model '{}')", model_id);
                 let backend = settings.vad_backend;
-                LiveDecoder::Chunked(Box::new(ChunkedDecode::new(
+                let chunks = ChunkedDecode::new(
                     tm,
                     tm.engine.cancel_mark(),
                     ChunkSetup::Pending(Box::new(PendingSetup {
@@ -71,7 +71,17 @@ impl<'a> LiveSession<'a> {
                     })),
                     model_id,
                     backend,
-                )))
+                );
+                // Fork: the recording start already opened the live overlay
+                // for this model's tail preview (see `set_chunk_preview`).
+                let chunks = if tm.chunk_preview.load(Ordering::Acquire) {
+                    info!("Live tail preview started (model '{}')", model_id);
+                    tm.stream_active.store(true, Ordering::Release);
+                    chunks.with_preview()
+                } else {
+                    chunks
+                };
+                LiveDecoder::Chunked(Box::new(chunks))
             }
         };
         Some(Self { decoder })
