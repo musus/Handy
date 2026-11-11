@@ -40,7 +40,7 @@
       "files": {},
       "hardenedRuntime": true,
       "minimumSystemVersion": "10.15",
-      "signingIdentity": "HandyDevCert",
+      "signingIdentity": "B3088F191FAE021DA24088E2286BB6090C9A179E",
       "entitlements": "Entitlements.plist"
     },
     "linux": {

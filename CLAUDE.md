@@ -24,7 +24,7 @@ v0.10.0 からは upstream がすべてのモデルを transcribe-cpp（GGUF）�
 4. **CJK 文字間スペース除去** — `audio_toolkit/text.rs` の `remove_cjk_interchar_spaces`（`normalize_transcription_output` 内）
 5. **旧 `.ort` 版 moonshine-base-ja の移行** — `managers/model.rs` の `RETIRED_ONNX_MODELS` に `moonshine-base-ja` を追加。`models/moonshine-base-ja/` が残っていれば、upstream の移行画面が GGUF 版への置き換えと旧ファイル削除を案内する
 6. **途中で止まったデコードの結果を捨てない** — `engine_supervisor/worker.rs` の `Request::Run` 分岐。transcribe-cpp が繰り返し検出（status 19）や生成上限（status 18）で止めたとき、エラーに付いている途中結果（繰り返しは除去済み）をそのまま返す。upstream はエラーにして全文を捨てるため、マイク音量が小さい環境（Studio Display のマイク、入力音量 29% など）では moonshine-base-ja の短い発話がほぼ毎回「文字起こしに失敗しました」になる。旧 0.9.8 フォークも途中結果を返していた
-7. **updater / CI** — `tauri.conf.json` の updater endpoint・pubkey・`signingIdentity`（`HandyDevCert`）・`createUpdaterArtifacts`、`.github/workflows` は fork 版に固定（`upstream-sync.yml`）、`.github/upstream-version`
+7. **updater / CI** — `tauri.conf.json` の updater endpoint・pubkey・`signingIdentity`（HandyDevCert の SHA-1 で固定。下の「署名証明書」を参照）・`createUpdaterArtifacts`、`.github/workflows` は fork 版に固定（`upstream-sync.yml`）、`.github/upstream-version`
 
 ### upstream マージ手順
 
@@ -62,6 +62,17 @@ bun run tauri build
 - Xcode 更新後はライセンス未同意で `xcrun` が止まる。`sudo /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild -license accept`（`xcode-select` を変えずに同意できる）
 
 アプリ本体の生成後に出る「`A public key has been found, but no private key. Make sure to set TAURI_SIGNING_PRIVATE_KEY`」エラーはアップデーター署名の警告で、`.app`/`.dmg` 自体は正常に生成されている。
+
+### 署名証明書（HandyDevCert）
+
+macOS は入力監視・アクセシビリティ・マイクの許可を「バンドル識別子 + 署名証明書」で覚えている。リリースごとに証明書が変わると、更新のたびに許可が外れる。特に入力監視が外れると、ショートカットが修飾キー（fn・command 単体）にしか反応しなくなる。v0.10.0-fork.1（MBA でビルド）→ fork.2（MacStudio でビルド）で、Mac ごとに別々に作った自己署名証明書が使われて実際に起きた。
+
+- `tauri.conf.json` の `signingIdentity` は名前ではなく証明書の SHA-1 `B3088F191FAE021DA24088E2286BB6090C9A179E` で固定している。この証明書を持たない Mac では署名の段階でビルドが失敗する（別の証明書で黙って署名されるのを防ぐため）
+- 証明書が入っているのは MacStudio（`MacStudio2023`）だけ。リリース用のビルドは MacStudio で行う。MBA にある HandyDevCert（`92D5A63D…`）は fork.1 を署名した古いもので、使わない
+- 他の Mac でビルドしたい場合は、MacStudio のキーチェーンアクセスから HandyDevCert を .p12 で書き出し、`security import HandyDevCert.p12 -k ~/Library/Keychains/login.keychain-db -T /usr/bin/codesign` で入れる
+- SSH 越しのビルドは署名で `errSecInternalComponent` になる（キーチェーンがロックされている）。MacStudio の画面上のターミナルでビルドする
+- HandyDevCert を新しく作り直さない。作り直すと、全ての Mac で許可が外れる
+- リリース前に `codesign -d -r- src-tauri/target/release/bundle/macos/Handy.app` の `certificate leaf` が上のハッシュと一致することを確かめる
 
 ### 動作確認
 
