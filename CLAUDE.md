@@ -23,7 +23,8 @@ v0.10.0 からは upstream がすべてのモデルを transcribe-cpp（GGUF）�
 3. **macOS システム音量 ducking** — `managers/audio.rs`（`macos_coreaudio`、`MuteState.ducked`、`saved_volume`、`restore_audio()`、`cancel_recording` での `remove_mute()`）、`actions.rs`（`duck_now`）、`settings.rs` の `duck_volume_percent` / `duck_fade_ms`、`shortcut/mod.rs` の `change_duck_*`、`lib.rs` のコマンド登録、`DuckLevelSlider` / `DuckFadeSlider`、`GeneralSettings.tsx`、`settingsStore.ts`、`bindings.ts`、全ロケールの `settings.sound.duckLevel` / `duckFade`、`Cargo.toml` の `coreaudio-sys`
 4. **CJK 文字間スペース除去** — `audio_toolkit/text.rs` の `remove_cjk_interchar_spaces`（`normalize_transcription_output` 内）
 5. **旧 `.ort` 版 moonshine-base-ja の移行** — `managers/model.rs` の `RETIRED_ONNX_MODELS` に `moonshine-base-ja` を追加。`models/moonshine-base-ja/` が残っていれば、upstream の移行画面が GGUF 版への置き換えと旧ファイル削除を案内する
-6. **updater / CI** — `tauri.conf.json` の updater endpoint・pubkey・`signingIdentity`（`HandyDevCert`）・`createUpdaterArtifacts`、`.github/workflows` は fork 版に固定（`upstream-sync.yml`）、`.github/upstream-version`
+6. **途中で止まったデコードの結果を捨てない** — `engine_supervisor/worker.rs` の `Request::Run` 分岐。transcribe-cpp が繰り返し検出（status 19）や生成上限（status 18）で止めたとき、エラーに付いている途中結果（繰り返しは除去済み）をそのまま返す。upstream はエラーにして全文を捨てるため、マイク音量が小さい環境（Studio Display のマイク、入力音量 29% など）では moonshine-base-ja の短い発話がほぼ毎回「文字起こしに失敗しました」になる。旧 0.9.8 フォークも途中結果を返していた
+7. **updater / CI** — `tauri.conf.json` の updater endpoint・pubkey・`signingIdentity`（`HandyDevCert`）・`createUpdaterArtifacts`、`.github/workflows` は fork 版に固定（`upstream-sync.yml`）、`.github/upstream-version`
 
 ### upstream マージ手順
 

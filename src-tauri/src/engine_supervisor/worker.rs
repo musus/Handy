@@ -117,6 +117,24 @@ pub fn run() -> i32 {
                     inject_fault("run", info.on_gpu);
                     match session.run(&pcm, &options) {
                         Ok(transcript) => Response::Transcript(transcript),
+                        // A repetition or budget stop keeps the text decoded
+                        // before it, with the repeats dropped. Moonshine Base
+                        // Japanese stops this way on quiet, ordinary short
+                        // dictations, so failing the run would lose text the
+                        // user did say (the pre-0.10 fork returned it).
+                        Err(
+                            transcribe_cpp::Error::OutputRepetition {
+                                message,
+                                partial: Some(partial),
+                            }
+                            | transcribe_cpp::Error::OutputTruncated {
+                                message,
+                                partial: Some(partial),
+                            },
+                        ) => {
+                            warn!("Keeping the partial transcript of a stopped decode: {message}");
+                            Response::Transcript(*partial)
+                        }
                         Err(e) => Response::Error(e.to_string()),
                     }
                 }
